@@ -124,6 +124,10 @@ config OLIMEX_STM32_H405
     select STM32F405_SOC
 
 
+config STM32_NUCLEO64
+    bool
+    select STM32L45_SOC
+
 config NSERIES
     bool
     select OMAP
@@ -257,6 +261,14 @@ config STM32VLDISCOVERY
     bool
     select STM32F100_SOC
 
+config STM32NUCLEO64
+    bool
+    select STM32L45_SOC
+    select ARM_V7M
+    select OR_IRQ
+    select STM32F4XX_SYSCFG
+    select STM32F4XX_EXTI
+
 config STRONGARM
     bool
     select PXA2XX
@@ -375,6 +387,12 @@ config STM32F405_SOC
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
 
+config STM32L45_SOC
+    bool
+    select ARM_V7M
+    select OR_IRQ
+    select STM32F4XX_SYSCFG
+    select STM32F4XX_EXTI
 
 config XLNX_ZYNQMP_ARM
     bool
