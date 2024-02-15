@@ -36,6 +36,7 @@
 #include "qom/object.h"
 #include "hw/clock.h"
 #include "hw/or-irq.h"
+#include "hw/robot/robot.h"
 
 #define TYPE_STM32L45_SOC "stm32l45-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(STM32L45State, STM32L45_SOC)

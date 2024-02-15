@@ -35,7 +35,7 @@
 /* stm32vldiscovery implementation is derived from netduinoplus2 */
 
 /* Main SYSCLK frequency in Hz (40MHz) */
-#define SYSCLK_FRQ 4000000ULL
+#define SYSCLK_FRQ 40000000ULL
 
 static void stm32nucleo64_init(MachineState *machine)
 {

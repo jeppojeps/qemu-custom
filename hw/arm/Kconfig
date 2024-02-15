@@ -393,6 +393,7 @@ config STM32L45_SOC
     select OR_IRQ
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
+    select ROBOT
 
 config XLNX_ZYNQMP_ARM
     bool

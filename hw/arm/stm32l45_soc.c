@@ -26,9 +26,11 @@
 #include "qapi/error.h"
 #include "exec/address-spaces.h"
 #include "sysemu/sysemu.h"
+#include "hw/robot/robot.h"
 #include "hw/arm/stm32l45_soc.h"
 #include "hw/qdev-clock.h"
 #include "hw/misc/unimp.h"
+
 
 /*#define SYSCFG_ADD                     0x40013800
 static const uint32_t usart_addr[] = { 0x40011000, 0x40004400, 0x40004800,
@@ -146,7 +148,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
      */
 
     /* The refclk always runs at frequency HCLK / 4 */
-    clock_set_mul_div(s->refclk, 4, 1);
+    clock_set_mul_div(s->refclk, 8, 1);
     clock_set_source(s->refclk, s->sysclk);
 
     memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
@@ -317,9 +319,9 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("DMA2",        0x40026400, 0x400);
     create_unimplemented_device("Ethernet",    0x40028000, 0x1400);
     create_unimplemented_device("USB OTG HS",  0x40040000, 0x30000);
-    create_unimplemented_device("USB OTG FS",  0x50000000, 0x31000);
     create_unimplemented_device("DCMI",        0x50050000, 0x400);
     create_unimplemented_device("RNG",         0x50060800, 0x400);
+    rb_create(system_memory, 0x50000000);
 }
 
 static Property stm32l45_soc_properties[] = {
