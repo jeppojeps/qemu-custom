@@ -51,6 +51,7 @@
 #include "hw/display/ramfb.h"
 #include "hw/acpi/aml-build.h"
 #include "qapi/qapi-visit-common.h"
+#include "hw/robot/robot.h"
 
 /*
  * The virt machine physical address space used by some of the devices
@@ -88,6 +89,7 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_APLIC_S] =      {  0xd000000, APLIC_SIZE(VIRT_CPUS_MAX) },
     [VIRT_UART0] =        { 0x10000000,         0x100 },
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
+    [VIRT_ROBOT]=         { 0x10009000,         0x100 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
     [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
     [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
@@ -827,6 +829,31 @@ static void create_fdt_sockets(RISCVVirtState *s, const MemMapEntry *memmap,
     riscv_socket_fdt_write_distance_matrix(ms);
 }
 
+static void create_fdt_robot(RISCVVirtState *s, const MemMapEntry *memmap,
+                              uint32_t irq_virtio_phandle)
+{
+    char *name;
+    MachineState *ms = MACHINE(s);
+
+    name = g_strdup_printf("/soc/virtio_mmio@%lx",
+        (long)(memmap[VIRT_ROBOT].base));
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "virtio,mmio");
+    qemu_fdt_setprop_cells(ms->fdt, name, "reg",
+        0x0, memmap[VIRT_ROBOT].base,
+        0x0, memmap[VIRT_ROBOT].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent",
+        irq_virtio_phandle);
+    if (s->aia_type == VIRT_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts",
+                              VIRTIO_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts",
+                               VIRTIO_IRQ, 0x4);
+    g_free(name);
+    }
+}
+
 static void create_fdt_virtio(RISCVVirtState *s, const MemMapEntry *memmap,
                               uint32_t irq_virtio_phandle)
 {
@@ -1022,7 +1049,7 @@ static void create_fdt(RISCVVirtState *s, const MemMapEntry *memmap)
 {
     MachineState *ms = MACHINE(s);
     uint32_t phandle = 1, irq_mmio_phandle = 1, msi_pcie_phandle = 1;
-    uint32_t irq_pcie_phandle = 1, irq_virtio_phandle = 1;
+    uint32_t irq_pcie_phandle = 1, irq_virtio_phandle = 1, robot_handle=1;
     uint8_t rng_seed[32];
 
     ms->fdt = create_device_tree(&s->fdt_size);
@@ -1047,6 +1074,7 @@ static void create_fdt(RISCVVirtState *s, const MemMapEntry *memmap)
                        &msi_pcie_phandle);
 
     create_fdt_virtio(s, memmap, irq_virtio_phandle);
+    create_fdt_robot(s, memmap, robot_handle);
 
     create_fdt_pcie(s, memmap, irq_pcie_phandle, msi_pcie_phandle);
 
@@ -1079,7 +1107,6 @@ static inline DeviceState *gpex_pcie_init(MemoryRegion *sys_mem,
     MemoryRegion *mmio_alias, *high_mmio_alias, *mmio_reg;
     qemu_irq irq;
     int i;
-
     dev = qdev_new(TYPE_GPEX_HOST);
 
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
@@ -1501,6 +1528,7 @@ static void virt_machine_init(MachineState *machine)
                    memmap[VIRT_PCIE_PIO].base,
                    DEVICE(pcie_irqchip));
 
+    rb_create(system_memory, memmap[VIRT_ROBOT].base);
     create_platform_bus(s, DEVICE(mmio_irqchip));
 
     serial_mm_init(system_memory, memmap[VIRT_UART0].base,
