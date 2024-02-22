@@ -268,6 +268,7 @@ config STM32NUCLEO64
     select OR_IRQ
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
+    select STM32L45_RCC
 
 config STRONGARM
     bool

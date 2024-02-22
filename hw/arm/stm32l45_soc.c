@@ -94,6 +94,10 @@ static void stm32l45_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "syscfg", &s->syscfg, TYPE_STM32F4XX_SYSCFG);
 
+    /* Initialize RCC */
+    object_initialize_child(obj, "rcc", &s->rcc, TYPE_STM32L45_RCC);
+
+
     for (i = 0; i < STM_NUM_USARTS; i++) {
         object_initialize_child(obj, "usart[*]", &s->usart[i],
                                 TYPE_STM32F2XX_USART);
@@ -114,8 +118,8 @@ static void stm32l45_soc_initfn(Object *obj)
 
     object_initialize_child(obj, "exti", &s->exti, TYPE_STM32F4XX_EXTI);
 
-    s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
-    s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
+    //s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
+    //s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
 }
 
 static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
@@ -123,34 +127,19 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     STM32L45State *s = STM32L45_SOC(dev_soc);
     MemoryRegion *system_memory = get_system_memory();
     DeviceState *dev, *armv7m;
+    DeviceState *rcc_dev;
     SysBusDevice *busdev;
     Error *err = NULL;
     int i;
-
-    /*
-     * We use s->refclk internally and only define it with qdev_init_clock_in()
-     * so it is correctly parented and not leaked on an init/deinit; it is not
-     * intended as an externally exposed clock.
-     */
-    if (clock_has_source(s->refclk)) {
-        error_setg(errp, "refclk clock must not be wired up by the board code");
+    
+    /* Initialize RCC first as it provides clocks */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->rcc), errp)) {
         return;
     }
-
-    if (!clock_has_source(s->sysclk)) {
-        error_setg(errp, "sysclk clock must be wired up by the board code");
-        return;
-    }
-
-    /*
-     * TODO: ideally we should model the SoC RCC and its ability to
-     * change the sysclk frequency and define different sysclk sources.
-     */
-
-    /* The refclk always runs at frequency HCLK / 4 */
-    clock_set_mul_div(s->refclk, 8, 1);
-    clock_set_source(s->refclk, s->sysclk);
-
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rcc), 0, 0x40023800);
+    
+    rcc_dev = DEVICE(&s->rcc);
+    
     memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
                            FLASH_SIZE, &err);
     if (err != NULL) {
@@ -188,8 +177,14 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     qdev_prop_set_uint32(armv7m, "num-irq", 75);
     qdev_prop_set_string(armv7m, "cpu-type", s->cpu_type);
     qdev_prop_set_bit(armv7m, "enable-bitband", true);
-    qdev_connect_clock_in(armv7m, "cpuclk", s->sysclk);
-    qdev_connect_clock_in(armv7m, "refclk", s->refclk);
+
+    /* Connect RCC clock outputs to CPU clocks */
+    qdev_connect_clock_in(armv7m, "cpuclk",
+                         qdev_get_clock_out(rcc_dev, "sysclk"));
+    qdev_connect_clock_in(armv7m, "refclk",
+                         qdev_get_clock_out(rcc_dev, "hclk"));
+
+
     object_property_set_link(OBJECT(&s->armv7m), "memory",
                              OBJECT(system_memory), &error_abort);
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->armv7m), errp)) {
@@ -220,7 +215,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     /* Timer 2 to 5 */
     for (i = 0; i < STM_NUM_TIMERS; i++) {
         dev = DEVICE(&(s->timer[i]));
-        qdev_prop_set_uint64(dev, "clock-frequency", 80000000);
+        qdev_prop_set_uint64(dev, "clock-frequency", 1000000000);
         if (!sysbus_realize(SYS_BUS_DEVICE(&s->timer[i]), errp)) {
             return;
         }
@@ -312,7 +307,6 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("GPIOH",       0x40021C00, 0x400);
     create_unimplemented_device("GPIOI",       0x40022000, 0x400);
     create_unimplemented_device("CRC",         0x40023000, 0x400);
-    create_unimplemented_device("RCC",         0x40023800, 0x400);
     create_unimplemented_device("Flash Int",   0x40023C00, 0x400);
     create_unimplemented_device("BKPSRAM",     0x40024000, 0x400);
     create_unimplemented_device("DMA1",        0x40026000, 0x400);
