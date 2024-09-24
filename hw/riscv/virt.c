@@ -53,6 +53,7 @@
 #include "qapi/qapi-visit-common.h"
 #include "hw/robot/robot.h"
 
+
 /*
  * The virt machine physical address space used by some of the devices
  * namely ACLINT, PLIC, APLIC, and IMSIC depend on number of Sockets,
@@ -746,6 +747,7 @@ static void create_fdt_sockets(RISCVVirtState *s, const MemMapEntry *memmap,
                                uint32_t *irq_mmio_phandle,
                                uint32_t *irq_pcie_phandle,
                                uint32_t *irq_virtio_phandle,
+                               uint32_t *robot_phandle,
                                uint32_t *msi_pcie_phandle)
 {
     char *clust_name;
@@ -815,6 +817,7 @@ static void create_fdt_sockets(RISCVVirtState *s, const MemMapEntry *memmap,
         if (socket == 0) {
             *irq_mmio_phandle = xplic_phandles[socket];
             *irq_virtio_phandle = xplic_phandles[socket];
+            *robot_phandle = xplic_phandles[socket];
             *irq_pcie_phandle = xplic_phandles[socket];
         }
         if (socket == 1) {
@@ -1049,7 +1052,7 @@ static void create_fdt(RISCVVirtState *s, const MemMapEntry *memmap)
 {
     MachineState *ms = MACHINE(s);
     uint32_t phandle = 1, irq_mmio_phandle = 1, msi_pcie_phandle = 1;
-    uint32_t irq_pcie_phandle = 1, irq_virtio_phandle = 1, robot_handle=1;
+    uint32_t irq_pcie_phandle = 1, irq_virtio_phandle = 1, robot_phandle=1;
     uint8_t rng_seed[32];
 
     ms->fdt = create_device_tree(&s->fdt_size);
@@ -1071,10 +1074,10 @@ static void create_fdt(RISCVVirtState *s, const MemMapEntry *memmap)
 
     create_fdt_sockets(s, memmap, &phandle, &irq_mmio_phandle,
                        &irq_pcie_phandle, &irq_virtio_phandle,
-                       &msi_pcie_phandle);
+                       &msi_pcie_phandle, &robot_phandle);
 
     create_fdt_virtio(s, memmap, irq_virtio_phandle);
-    create_fdt_robot(s, memmap, robot_handle);
+    create_fdt_robot(s, memmap, robot_phandle);
 
     create_fdt_pcie(s, memmap, irq_pcie_phandle, msi_pcie_phandle);
 
