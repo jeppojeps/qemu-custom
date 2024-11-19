@@ -64,6 +64,20 @@ bool clock_set(Clock *clk, uint64_t period)
     return true;
 }
 
+/*
+bool clock_set(Clock *clk, uint64_t period)
+{
+    if (clk->period == period) {
+        return false;
+    }
+    trace_clock_set(CLOCK_PATH(clk), CLOCK_PERIOD_TO_HZ(clk->period),
+                    CLOCK_PERIOD_TO_HZ(period));
+    clk->period = period;
+
+    return true;
+}
+ */
+
 static uint64_t clock_get_child_period(Clock *clk)
 {
     /*
@@ -152,6 +166,24 @@ void clock_set_mul_div(Clock *clk, uint32_t multiplier, uint32_t divider)
     clk->multiplier = multiplier;
     clk->divider = divider;
 }
+
+/*
+bool clock_set_mul_div(Clock *clk, uint32_t multiplier, uint32_t divider)
+{
+    assert(divider != 0);
+
+    if (clk->multiplier == multiplier && clk->divider == divider) {
+        return false;
+    }
+
+    trace_clock_set_mul_div(CLOCK_PATH(clk), clk->multiplier, multiplier,
+                            clk->divider, divider);
+    clk->multiplier = multiplier;
+    clk->divider = divider;
+
+    return true;
+}
+*/
 
 static void clock_initfn(Object *obj)
 {
