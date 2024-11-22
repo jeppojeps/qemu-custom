@@ -34,28 +34,27 @@
 
 /* stm32vldiscovery implementation is derived from netduinoplus2 */
 
-/* Main SYSCLK frequency in Hz (40MHz) */
-//#define SYSCLK_FRQ 40000000ULL
-#define SYSCLK_FRQ 168000000ULL
-
 static void stm32nucleo64_init(MachineState *machine)
 {
     DeviceState *dev;
-    Clock *sysclk;
-
-    /* This clock doesn't need migration because it is fixed-frequency */
-    sysclk = clock_new(OBJECT(machine), "SYSCLK");
-    clock_set_hz(sysclk, SYSCLK_FRQ);
+    //Object *rcc;
 
     dev = qdev_new(TYPE_STM32L45_SOC);
     qdev_prop_set_string(dev, "cpu-type", ARM_CPU_TYPE_NAME("cortex-m4"));
-    qdev_connect_clock_in(dev, "sysclk", sysclk);
+    
+    
+    /* Get RCC object and set HSE frequency */
+    //rcc = object_resolve_path_component(OBJECT(dev), "rcc");
+    //if (rcc) {
+    //    object_property_set_int(rcc, "hse-freq", 8000000, &error_abort);
+    //}
     sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);
 
     armv7m_load_kernel(ARM_CPU(first_cpu),
-                       machine->kernel_filename,
-                       0, FLASH_SIZE);
+                      machine->kernel_filename,
+                      0, FLASH_SIZE);
 }
+
 
 static void stm32nucleo64_machine_init(MachineClass *mc)
 {

@@ -27,13 +27,14 @@
 
 #include "hw/misc/stm32f4xx_syscfg.h"
 #include "hw//misc/stm32f4xx_exti.h"
+#include "hw//misc/stm32l45_rcc.h"
 #include "hw/timer/stm32f2xx_timer.h"
 #include "hw/char/stm32f2xx_usart.h"
 #include "hw/adc/stm32f2xx_adc.h"
 #include "hw/char/stm32f2xx_usart.h"
 #include "hw/ssi/stm32f2xx_spi.h"
-#include "hw/arm/armv7m.h"
 #include "qom/object.h"
+#include "armv7m.h"
 #include "hw/clock.h"
 #include "hw/or-irq.h"
 #include "hw/robot/robot.h"
@@ -76,6 +77,7 @@ struct STM32L45State {
     MemoryRegion sram;
     MemoryRegion flash;
     MemoryRegion flash_alias;
+    STM32L45RccState rcc;
 
     Clock *sysclk;
     Clock *refclk;
