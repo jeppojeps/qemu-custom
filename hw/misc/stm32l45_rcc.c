@@ -37,11 +37,15 @@
 #define LSI_FREQ 32000ULL     /* 32 kHz internal oscillator */
 #define HSE_DEFAULT_FREQ 8000000ULL /* 8 MHz external oscillator default */
 #define LSE_FREQ 32768ULL     /* 32.768 kHz external oscillator */
+#define MSI_FREQ_BASE 100000ULL  /* 100 KHz base frequency */
 
 /* Register field definitions */
 REG32(CR, 0x00)
     FIELD(CR, HSION, 0, 1)
     FIELD(CR, HSIRDY, 1, 1)
+    FIELD(CR, MSIRANGE, 4, 4)  /* MSI clock ranges */
+    FIELD(CR, MSION, 8, 1)
+    FIELD(CR, MSIRDY, 9, 1)
     FIELD(CR, HSEON, 16, 1)
     FIELD(CR, HSERDY, 17, 1)
     FIELD(CR, PLLON, 24, 1)
@@ -89,17 +93,31 @@ static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
         pll_freq = pll_source * (pll_mul + 2);
     }
 
+
+    /* Calculate MSI frequency if enabled */
+    if (FIELD_EX32(s->cr, CR, MSION) && FIELD_EX32(s->cr, CR, MSIRDY)) {
+        uint32_t msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
+        /* MSI frequency ranges from 100KHz to 48MHz depending on MSIRANGE */
+        msi_freq = MSI_FREQ_BASE << msirange;
+    }
+
+    /* Select system clock source */
     /* Select system clock source */
     switch (FIELD_EX32(s->cfgr, CFGR, SW)) {
-    case 0: /* HSI */
+    case 0: /* MSI */
+        if (FIELD_EX32(s->cr, CR, MSION) && FIELD_EX32(s->cr, CR, MSIRDY)) {
+            sysclk_freq = msi_freq;
+        }
+        break;
+    case 1: /* HSI */
         sysclk_freq = HSI_FREQ;
         break;
-    case 1: /* HSE */
+    case 2: /* HSE */
         if (FIELD_EX32(s->cr, CR, HSEON) && FIELD_EX32(s->cr, CR, HSERDY)) {
             sysclk_freq = s->hse_freq;
         }
         break;
-    case 2: /* PLL */
+    case 3: /* PLL */
         if (pll_enabled) {
             sysclk_freq = pll_freq;
         }
@@ -183,6 +201,11 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     case A_CR:
         s->cr = (s->cr & ~rcc_cr_rw_mask) | (value & rcc_cr_rw_mask);
         /* Update ready flags */
+        if (value & R_CR_MSION_MASK) {
+            s->cr |= R_CR_MSIRDY_MASK;
+        } else {
+            s->cr &= ~R_CR_MSIRDY_MASK;
+        }
         if (value & R_CR_HSION_MASK) {
             s->cr |= R_CR_HSIRDY_MASK;
         } else {
