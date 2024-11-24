@@ -50,6 +50,7 @@ struct STM32L45RccState {
     uint32_t ahbenr;
     uint32_t apb2enr;
     uint32_t apb1enr;
+    uint32_t ahb2enr;
     uint32_t bdcr;
     uint32_t csr;
 

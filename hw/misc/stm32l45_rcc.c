@@ -63,6 +63,7 @@ REG32(CFGR, 0x04)
 REG32(CIR, 0x08)
 REG32(APB2RSTR, 0x0C)
 REG32(APB1RSTR, 0x10)
+REG32(AHB2ENR, 0x4C)  // AHB2 peripheral clock enable register
 REG32(AHBENR, 0x14)
 REG32(APB2ENR, 0x18)
 REG32(APB1ENR, 0x1C)
@@ -179,6 +180,9 @@ static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
     case A_CFGR:
         retval = s->cfgr;
         break;
+    case A_AHB2ENR:
+        retval = s->ahb2enr;
+        break;
     case A_CIR:
         retval = s->cir;
         break;
@@ -236,6 +240,10 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     fclose(file);
 
     switch (addr) {
+
+    case A_AHB2ENR:
+        s->ahb2enr = value;
+        break;
     case A_CR:
         s->cr = (s->cr & ~rcc_cr_rw_mask) | (value & rcc_cr_rw_mask);
         /* Update ready flags */
@@ -338,6 +346,7 @@ static void stm32l45_rcc_reset(DeviceState *dev)
     s->cir = 0;
     s->apb2rstr = 0;
     s->apb1rstr = 0;
+    s->ahb2enr = 0;
     s->ahbenr = 0;
     s->apb2enr = 0;
     s->apb1enr = 0;
@@ -363,6 +372,7 @@ static const VMStateDescription vmstate_stm32l45_rcc = {
         VMSTATE_UINT32(cir, STM32L45RccState),
         VMSTATE_UINT32(apb2rstr, STM32L45RccState),
         VMSTATE_UINT32(apb1rstr, STM32L45RccState),
+	VMSTATE_UINT32(ahb2enr, STM32L45RccState),
         VMSTATE_UINT32(ahbenr, STM32L45RccState),
         VMSTATE_UINT32(apb2enr, STM32L45RccState),
         VMSTATE_UINT32(apb1enr, STM32L45RccState),

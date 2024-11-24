@@ -266,9 +266,6 @@ config STM32NUCLEO64
     select STM32L45_SOC
     select ARM_V7M
     select OR_IRQ
-    select STM32F4XX_SYSCFG
-    select STM32F4XX_EXTI
-    select STM32L45_RCC
 
 config STRONGARM
     bool
@@ -394,6 +391,8 @@ config STM32L45_SOC
     select OR_IRQ
     select STM32F4XX_SYSCFG
     select STM32F4XX_EXTI
+    select STM32L45_RCC
+    select STM32L45_GPIO
     select ROBOT
 
 config XLNX_ZYNQMP_ARM
