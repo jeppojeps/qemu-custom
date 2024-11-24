@@ -63,6 +63,7 @@ REG32(CFGR, 0x04)
 REG32(CIR, 0x08)
 REG32(APB2RSTR, 0x0C)
 REG32(APB1RSTR, 0x10)
+REG32(AHB2ENR, 0x4C)  // AHB2 peripheral clock enable register
 REG32(AHBENR, 0x14)
 REG32(APB2ENR, 0x18)
 REG32(APB1ENR, 0x1C)
@@ -76,6 +77,26 @@ static const uint32_t rcc_cr_rw_mask = R_CR_HSION_MASK | R_CR_HSEON_MASK |
 static const uint32_t rcc_cfgr_rw_mask = R_CFGR_SW_MASK | R_CFGR_HPRE_MASK |
                                         R_CFGR_PPRE1_MASK | R_CFGR_PPRE2_MASK |
                                         R_CFGR_PLLSRC_MASK | R_CFGR_PLLMUL_MASK;
+
+
+
+
+
+static void dump_rcc_registers(STM32L45RccState *s, const char *context) {
+    qemu_log_mask(LOG_UNIMP, "RCC Registers [%s]:\n", context);
+    qemu_log_mask(LOG_UNIMP, "  CR    = 0x%08x\n", s->cr);
+    qemu_log_mask(LOG_UNIMP, "    MSION  = %d\n", FIELD_EX32(s->cr, CR, MSION));
+    qemu_log_mask(LOG_UNIMP, "    MSIRDY = %d\n", FIELD_EX32(s->cr, CR, MSIRDY));
+    qemu_log_mask(LOG_UNIMP, "    HSION  = %d\n", FIELD_EX32(s->cr, CR, HSION));
+    qemu_log_mask(LOG_UNIMP, "    HSIRDY = %d\n", FIELD_EX32(s->cr, CR, HSIRDY));
+    qemu_log_mask(LOG_UNIMP, "  CFGR   = 0x%08x\n", s->cfgr);
+    qemu_log_mask(LOG_UNIMP, "    SW     = %d\n", FIELD_EX32(s->cfgr, CFGR, SW));
+    qemu_log_mask(LOG_UNIMP, "    SWS    = %d\n", FIELD_EX32(s->cfgr, CFGR, SWS));
+    qemu_log_mask(LOG_UNIMP, "    HPRE   = %d\n", FIELD_EX32(s->cfgr, CFGR, HPRE));
+    qemu_log_mask(LOG_UNIMP, "    PPRE1  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE1));
+    qemu_log_mask(LOG_UNIMP, "    PPRE2  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE2));
+}
+
 
 /* Private functions */
 static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
@@ -159,6 +180,9 @@ static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
     case A_CFGR:
         retval = s->cfgr;
         break;
+    case A_AHB2ENR:
+        retval = s->ahb2enr;
+        break;
     case A_CIR:
         retval = s->cir;
         break;
@@ -197,8 +221,29 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     STM32L45RccState *s = opaque;
     uint32_t value = val64;
     bool update_clocks = false;
+      // File pointer
+    FILE *file;
+
+    // Open the file in write mode
+    file = fopen("/tmp/rcc.log", "w");
+
+    // Check if the file opened successfully
+    if (file == NULL) {
+        perror("Error opening file");
+	return;
+    }
+
+    // Write "porcabond" to the file
+    fprintf(file, "porcabond\n");
+
+    // Close the file
+    fclose(file);
 
     switch (addr) {
+
+    case A_AHB2ENR:
+        s->ahb2enr = value;
+        break;
     case A_CR:
         s->cr = (s->cr & ~rcc_cr_rw_mask) | (value & rcc_cr_rw_mask);
         /* Update ready flags */
@@ -223,6 +268,7 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
             s->cr &= ~R_CR_PLLRDY_MASK;
         }
         update_clocks = true;
+	dump_rcc_registers(s, "After CR write");
         break;
     case A_CFGR:
         s->cfgr = (s->cfgr & ~rcc_cfgr_rw_mask) | (value & rcc_cfgr_rw_mask);
@@ -300,6 +346,7 @@ static void stm32l45_rcc_reset(DeviceState *dev)
     s->cir = 0;
     s->apb2rstr = 0;
     s->apb1rstr = 0;
+    s->ahb2enr = 0;
     s->ahbenr = 0;
     s->apb2enr = 0;
     s->apb1enr = 0;
@@ -325,6 +372,7 @@ static const VMStateDescription vmstate_stm32l45_rcc = {
         VMSTATE_UINT32(cir, STM32L45RccState),
         VMSTATE_UINT32(apb2rstr, STM32L45RccState),
         VMSTATE_UINT32(apb1rstr, STM32L45RccState),
+	VMSTATE_UINT32(ahb2enr, STM32L45RccState),
         VMSTATE_UINT32(ahbenr, STM32L45RccState),
         VMSTATE_UINT32(apb2enr, STM32L45RccState),
         VMSTATE_UINT32(apb1enr, STM32L45RccState),
