@@ -81,6 +81,7 @@ static const uint32_t rcc_cfgr_rw_mask = R_CFGR_SW_MASK | R_CFGR_HPRE_MASK |
 static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
 {
     uint32_t sysclk_freq = HSI_FREQ; /* Default to HSI */
+    uint32_t msi_freq;
     uint32_t pll_freq;
     bool pll_enabled = false;
 
