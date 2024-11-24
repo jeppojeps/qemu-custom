@@ -23,13 +23,17 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/log.h"
+#include "qemu/error-report.h"
 #include "qapi/error.h"
+#include <inttypes.h>
 #include "exec/address-spaces.h"
 #include "sysemu/sysemu.h"
 #include "hw/robot/robot.h"
 #include "hw/arm/stm32l45_soc.h"
 #include "hw/qdev-clock.h"
 #include "hw/misc/unimp.h"
+
 
 
 /*#define SYSCFG_ADD                     0x40013800
@@ -136,9 +140,44 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rcc), errp)) {
         return;
     }
-    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rcc), 0, 0x40023800);
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->rcc), 0, 0x40021000);
+    qemu_log_mask(LOG_UNIMP, "STM32L4: RCC initialized and mapped to 0x40021000\n");
     
     rcc_dev = DEVICE(&s->rcc);
+    // Enable GPIO clocks (needed for peripherals)
+    uint32_t initial_ahbenr =
+        0x1 << 0 |  // GPIOAEN
+        0x1 << 1 |  // GPIOBEN
+        0x1 << 2 |  // GPIOCEN
+        0x1 << 3 |  // GPIODEN
+        0x1 << 4;   // GPIOEEN
+
+    //shadow write
+
+    /* Access RCC registers through memory operations */
+    MemoryRegion *rcc_mr = &s->rcc.mmio;
+    /* Only proceed if we have the memory region */
+    if (rcc_mr && rcc_mr->ops) {
+        /* Write to AHB2ENR using address_space_write */
+        address_space_write(&address_space_memory,
+                          0x40021000 + 0x4C,  // RCC base + AHB2ENR offset
+                          MEMTXATTRS_UNSPECIFIED,
+                          (uint8_t *)&initial_ahbenr,
+                          sizeof(initial_ahbenr));
+
+        /* Read back for verification */
+        uint32_t verify = 0;
+        address_space_read(&address_space_memory,
+                          0x40021000 + 0x4C,
+                          MEMTXATTRS_UNSPECIFIED,
+                          (uint8_t *)&verify,
+                          sizeof(verify));
+
+        qemu_log_mask(LOG_UNIMP, "STM32L4: Initial RCC AHB2ENR = 0x%08x\n",
+                     verify);
+    }
+
+    
     
     memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
                            FLASH_SIZE, &err);

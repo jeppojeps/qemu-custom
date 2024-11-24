@@ -77,6 +77,26 @@ static const uint32_t rcc_cfgr_rw_mask = R_CFGR_SW_MASK | R_CFGR_HPRE_MASK |
                                         R_CFGR_PPRE1_MASK | R_CFGR_PPRE2_MASK |
                                         R_CFGR_PLLSRC_MASK | R_CFGR_PLLMUL_MASK;
 
+
+
+
+
+static void dump_rcc_registers(STM32L45RccState *s, const char *context) {
+    qemu_log_mask(LOG_UNIMP, "RCC Registers [%s]:\n", context);
+    qemu_log_mask(LOG_UNIMP, "  CR    = 0x%08x\n", s->cr);
+    qemu_log_mask(LOG_UNIMP, "    MSION  = %d\n", FIELD_EX32(s->cr, CR, MSION));
+    qemu_log_mask(LOG_UNIMP, "    MSIRDY = %d\n", FIELD_EX32(s->cr, CR, MSIRDY));
+    qemu_log_mask(LOG_UNIMP, "    HSION  = %d\n", FIELD_EX32(s->cr, CR, HSION));
+    qemu_log_mask(LOG_UNIMP, "    HSIRDY = %d\n", FIELD_EX32(s->cr, CR, HSIRDY));
+    qemu_log_mask(LOG_UNIMP, "  CFGR   = 0x%08x\n", s->cfgr);
+    qemu_log_mask(LOG_UNIMP, "    SW     = %d\n", FIELD_EX32(s->cfgr, CFGR, SW));
+    qemu_log_mask(LOG_UNIMP, "    SWS    = %d\n", FIELD_EX32(s->cfgr, CFGR, SWS));
+    qemu_log_mask(LOG_UNIMP, "    HPRE   = %d\n", FIELD_EX32(s->cfgr, CFGR, HPRE));
+    qemu_log_mask(LOG_UNIMP, "    PPRE1  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE1));
+    qemu_log_mask(LOG_UNIMP, "    PPRE2  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE2));
+}
+
+
 /* Private functions */
 static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
 {
@@ -197,6 +217,23 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     STM32L45RccState *s = opaque;
     uint32_t value = val64;
     bool update_clocks = false;
+      // File pointer
+    FILE *file;
+
+    // Open the file in write mode
+    file = fopen("/tmp/rcc.log", "w");
+
+    // Check if the file opened successfully
+    if (file == NULL) {
+        perror("Error opening file");
+	return;
+    }
+
+    // Write "porcabond" to the file
+    fprintf(file, "porcabond\n");
+
+    // Close the file
+    fclose(file);
 
     switch (addr) {
     case A_CR:
@@ -223,6 +260,7 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
             s->cr &= ~R_CR_PLLRDY_MASK;
         }
         update_clocks = true;
+	dump_rcc_registers(s, "After CR write");
         break;
     case A_CFGR:
         s->cfgr = (s->cfgr & ~rcc_cfgr_rw_mask) | (value & rcc_cfgr_rw_mask);
