@@ -124,18 +124,18 @@ static const uint32_t rcc_cr_rw_mask = R_CR_HSION_MASK | R_CR_HSEON_MASK |
 
 
 static void dump_rcc_registers(STM32L45RccState *s, const char *context) {
-    qemu_log_mask(LOG_UNIMP, "RCC Registers [%s]:\n", context);
-    qemu_log_mask(LOG_UNIMP, "  CR    = 0x%08x\n", s->cr);
-    qemu_log_mask(LOG_UNIMP, "    MSION  = %d\n", FIELD_EX32(s->cr, CR, MSION));
-    qemu_log_mask(LOG_UNIMP, "    MSIRDY = %d\n", FIELD_EX32(s->cr, CR, MSIRDY));
-    qemu_log_mask(LOG_UNIMP, "    HSION  = %d\n", FIELD_EX32(s->cr, CR, HSION));
-    qemu_log_mask(LOG_UNIMP, "    HSIRDY = %d\n", FIELD_EX32(s->cr, CR, HSIRDY));
-    qemu_log_mask(LOG_UNIMP, "  CFGR   = 0x%08x\n", s->cfgr);
-    qemu_log_mask(LOG_UNIMP, "    SW     = %d\n", FIELD_EX32(s->cfgr, CFGR, SW));
-    qemu_log_mask(LOG_UNIMP, "    SWS    = %d\n", FIELD_EX32(s->cfgr, CFGR, SWS));
-    qemu_log_mask(LOG_UNIMP, "    HPRE   = %d\n", FIELD_EX32(s->cfgr, CFGR, HPRE));
-    qemu_log_mask(LOG_UNIMP, "    PPRE1  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE1));
-    qemu_log_mask(LOG_UNIMP, "    PPRE2  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE2));
+    qemu_log_mask(LOG_RCC, "RCC Registers [%s]:\n", context);
+    qemu_log_mask(LOG_RCC, "  CR    = 0x%08x\n", s->cr);
+    qemu_log_mask(LOG_RCC, "    MSION  = %d\n", FIELD_EX32(s->cr, CR, MSION));
+    qemu_log_mask(LOG_RCC, "    MSIRDY = %d\n", FIELD_EX32(s->cr, CR, MSIRDY));
+    qemu_log_mask(LOG_RCC, "    HSION  = %d\n", FIELD_EX32(s->cr, CR, HSION));
+    qemu_log_mask(LOG_RCC, "    HSIRDY = %d\n", FIELD_EX32(s->cr, CR, HSIRDY));
+    qemu_log_mask(LOG_RCC, "  CFGR   = 0x%08x\n", s->cfgr);
+    qemu_log_mask(LOG_RCC, "    SW     = %d\n", FIELD_EX32(s->cfgr, CFGR, SW));
+    qemu_log_mask(LOG_RCC, "    SWS    = %d\n", FIELD_EX32(s->cfgr, CFGR, SWS));
+    qemu_log_mask(LOG_RCC, "    HPRE   = %d\n", FIELD_EX32(s->cfgr, CFGR, HPRE));
+    qemu_log_mask(LOG_RCC, "    PPRE1  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE1));
+    qemu_log_mask(LOG_RCC, "    PPRE2  = %d\n", FIELD_EX32(s->cfgr, CFGR, PPRE2));
 }
 
 
@@ -153,7 +153,7 @@ static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
         if (msirange < ARRAY_SIZE(msi_frequencies)) {
             msi_freq = msi_frequencies[msirange];
         }
-        qemu_log_mask(LOG_UNIMP, "MSI: range=%d freq=%d Hz\n", msirange, msi_freq);
+        qemu_log_mask(LOG_RCC, "MSI: range=%d freq=%d Hz\n", msirange, msi_freq);
     }
 
     /* PLL configuration */
@@ -188,7 +188,7 @@ static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
                 pll_freq = vco / pllr;
             }
     
-            qemu_log_mask(LOG_UNIMP, "PLL: src=%dHz m=%d n=%d r=%d vco=%dHz out=%dHz\n",
+            qemu_log_mask(LOG_RCC, "PLL: src=%dHz m=%d n=%d r=%d vco=%dHz out=%dHz\n",
                          pll_source, pllm, plln, pllr, vco, pll_freq);
         }
     }
@@ -209,12 +209,12 @@ static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
    	case 3: /* PLL */
    	    if (pll_freq > 0) {
    	        sysclk_freq = pll_freq;
-   	        qemu_log_mask(LOG_UNIMP, "Switching to PLL clock: %d Hz\n", sysclk_freq);
+   	        qemu_log_mask(LOG_RCC, "Switching to PLL clock: %d Hz\n", sysclk_freq);
    	    }
    	    break;
      }
 
-    qemu_log_mask(LOG_UNIMP, "Clock Update: sysclk=%d Hz\n", sysclk_freq);
+    qemu_log_mask(LOG_RCC, "Clock Update: sysclk=%d Hz\n", sysclk_freq);
 
 
     /* Update SYSCLK and derived clocks */
@@ -243,28 +243,28 @@ static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
 {
     STM32L45RccState *s = opaque;
     uint64_t retval = 0;
-    qemu_log_mask(LOG_UNIMP, "RCC read: addr=0x%"HWADDR_PRIx"\n", addr);
+    qemu_log_mask(LOG_RCC, "RCC read: addr=0x%"HWADDR_PRIx"\n", addr);
 
     switch (addr) {
     case A_CCIPR:
         retval = s->ccipr;
-        qemu_log_mask(LOG_UNIMP, "RCC CCIPR read: 0x%08"PRIx32"\n", s->ccipr);
+        qemu_log_mask(LOG_RCC, "RCC CCIPR read: 0x%08"PRIx32"\n", s->ccipr);
         break;
     case A_PLLSAI1CFGR:
         retval = s->pllsai1cfgr;
-        qemu_log_mask(LOG_UNIMP, "RCC PLLSAI1CFGR read: 0x%08"PRIx32"\n", s->pllsai1cfgr);
+        qemu_log_mask(LOG_RCC, "RCC PLLSAI1CFGR read: 0x%08"PRIx32"\n", s->pllsai1cfgr);
         break;
     case A_CR:
         retval = s->cr;
-        qemu_log_mask(LOG_UNIMP, "RCC CR read: 0x%08"PRIx32"\n", s->cr);
+        qemu_log_mask(LOG_RCC, "RCC CR read: 0x%08"PRIx32"\n", s->cr);
         break;
     case A_CFGR:
         retval = s->cfgr;
-        qemu_log_mask(LOG_UNIMP, "RCC CFGR read: 0x%08"PRIx32"\n", s->cfgr);
+        qemu_log_mask(LOG_RCC, "RCC CFGR read: 0x%08"PRIx32"\n", s->cfgr);
         break;
     case A_AHB2ENR:
         retval = s->ahb2enr;
-        qemu_log_mask(LOG_UNIMP, "RCC AHB2ENR read: 0x%08"PRIx32"\n", s->ahb2enr);
+        qemu_log_mask(LOG_RCC, "RCC AHB2ENR read: 0x%08"PRIx32"\n", s->ahb2enr);
         break;
     case A_CIR:
         retval = s->cir;
@@ -274,7 +274,7 @@ static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
         break;
     case A_PLLCFGR:
             retval = s->pllcfgr;
-            qemu_log_mask(LOG_UNIMP, "RCC PLLCFGR read: 0x%08"PRIx32"\n", s->pllcfgr);
+            qemu_log_mask(LOG_RCC, "RCC PLLCFGR read: 0x%08"PRIx32"\n", s->pllcfgr);
             break;
     case A_APB1RSTR:
         retval = s->apb1rstr;
@@ -312,11 +312,11 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
 
     case A_CCIPR:
         s->ccipr = value;
-        qemu_log_mask(LOG_UNIMP, "RCC CCIPR write: 0x%08"PRIx32"\n", value);
+        qemu_log_mask(LOG_RCC, "RCC CCIPR write: 0x%08"PRIx32"\n", value);
         break;
     case A_PLLSAI1CFGR:
         s->pllsai1cfgr = value;
-        qemu_log_mask(LOG_UNIMP, "RCC PLLSAI1CFGR write: 0x%08"PRIx32"\n", value);
+        qemu_log_mask(LOG_RCC, "RCC PLLSAI1CFGR write: 0x%08"PRIx32"\n", value);
         update_clocks = true;
         break;	    
     case A_AHB2ENR:
@@ -326,25 +326,25 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
 
             /* Log changes to GPIO clocks */
             if (changed & 0x1F) {  // Any GPIO clock changed
-                qemu_log_mask(LOG_UNIMP, "RCC AHB2ENR: GPIO clocks changed:\n");
+                qemu_log_mask(LOG_RCC, "RCC AHB2ENR: GPIO clocks changed:\n");
                 if (changed & RCC_AHB2ENR_GPIOAEN) {
-                    qemu_log_mask(LOG_UNIMP, "  GPIOA clock: %s\n",
+                    qemu_log_mask(LOG_RCC, "  GPIOA clock: %s\n",
                                 (value & RCC_AHB2ENR_GPIOAEN) ? "enabled" : "disabled");
                 }
                 if (changed & RCC_AHB2ENR_GPIOBEN) {
-                    qemu_log_mask(LOG_UNIMP, "  GPIOB clock: %s\n",
+                    qemu_log_mask(LOG_RCC, "  GPIOB clock: %s\n",
                                 (value & RCC_AHB2ENR_GPIOBEN) ? "enabled" : "disabled");
                 }
                 if (changed & RCC_AHB2ENR_GPIOCEN) {
-                    qemu_log_mask(LOG_UNIMP, "  GPIOC clock: %s\n",
+                    qemu_log_mask(LOG_RCC, "  GPIOC clock: %s\n",
                                 (value & RCC_AHB2ENR_GPIOCEN) ? "enabled" : "disabled");
                 }
                 if (changed & RCC_AHB2ENR_GPIODEN) {
-                    qemu_log_mask(LOG_UNIMP, "  GPIOD clock: %s\n",
+                    qemu_log_mask(LOG_RCC, "  GPIOD clock: %s\n",
                                 (value & RCC_AHB2ENR_GPIODEN) ? "enabled" : "disabled");
                 }
                 if (changed & RCC_AHB2ENR_GPIOEEN) {
-                    qemu_log_mask(LOG_UNIMP, "  GPIOE clock: %s\n",
+                    qemu_log_mask(LOG_RCC, "  GPIOE clock: %s\n",
                                 (value & RCC_AHB2ENR_GPIOEEN) ? "enabled" : "disabled");
                 }
                 update_clocks = true;
@@ -358,8 +358,8 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
         s->cr = (s->cr & ~rcc_cr_rw_mask) | (value & rcc_cr_rw_mask);
 
         uint32_t new_msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
-        qemu_log_mask(LOG_UNIMP, "CR write: old=0x%08x new=0x%08x\n", old_cr, value);
-        qemu_log_mask(LOG_UNIMP, "  MSIRANGE: %d -> %d\n", old_msirange, new_msirange);
+        qemu_log_mask(LOG_RCC, "CR write: old=0x%08x new=0x%08x\n", old_cr, value);
+        qemu_log_mask(LOG_RCC, "  MSIRANGE: %d -> %d\n", old_msirange, new_msirange);
 
         /* Update ready flags */
         if (value & R_CR_MSION_MASK) {
@@ -388,28 +388,28 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
 	break;
     case A_PLLCFGR:
         uint32_t old_val = s->pllcfgr;
-        qemu_log_mask(LOG_UNIMP, "PLLCFGR write value=0x%08x (current=0x%08x)\n", value, old_val);
-        qemu_log_mask(LOG_UNIMP, "  Changing bits: 0x%08x\n", old_val ^ value);
-        qemu_log_mask(LOG_UNIMP, "  Setting bits: 0x%08x\n", value & ~old_val);
-        qemu_log_mask(LOG_UNIMP, "  Clearing bits: 0x%08x\n", old_val & ~value);
+        qemu_log_mask(LOG_RCC, "PLLCFGR write value=0x%08x (current=0x%08x)\n", value, old_val);
+        qemu_log_mask(LOG_RCC, "  Changing bits: 0x%08x\n", old_val ^ value);
+        qemu_log_mask(LOG_RCC, "  Setting bits: 0x%08x\n", value & ~old_val);
+        qemu_log_mask(LOG_RCC, "  Clearing bits: 0x%08x\n", old_val & ~value);
         
         // Show fields before
-        qemu_log_mask(LOG_UNIMP, "  Before:\n");
-        qemu_log_mask(LOG_UNIMP, "    PLLSRC: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLSRC));
-        qemu_log_mask(LOG_UNIMP, "    PLLM: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLM));
-        qemu_log_mask(LOG_UNIMP, "    PLLN: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLN));
-        qemu_log_mask(LOG_UNIMP, "    PLLREN: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLREN));
-        qemu_log_mask(LOG_UNIMP, "    PLLR: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLR));
+        qemu_log_mask(LOG_RCC, "  Before:\n");
+        qemu_log_mask(LOG_RCC, "    PLLSRC: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLSRC));
+        qemu_log_mask(LOG_RCC, "    PLLM: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLM));
+        qemu_log_mask(LOG_RCC, "    PLLN: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLN));
+        qemu_log_mask(LOG_RCC, "    PLLREN: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLREN));
+        qemu_log_mask(LOG_RCC, "    PLLR: %d\n", FIELD_EX32(old_val, PLLCFGR, PLLR));
         
         s->pllcfgr = value;
         
         // Show fields after
-        qemu_log_mask(LOG_UNIMP, "  After:\n");
-        qemu_log_mask(LOG_UNIMP, "    PLLSRC: %d\n", FIELD_EX32(value, PLLCFGR, PLLSRC));
-        qemu_log_mask(LOG_UNIMP, "    PLLM: %d\n", FIELD_EX32(value, PLLCFGR, PLLM));
-        qemu_log_mask(LOG_UNIMP, "    PLLN: %d\n", FIELD_EX32(value, PLLCFGR, PLLN));
-        qemu_log_mask(LOG_UNIMP, "    PLLREN: %d\n", FIELD_EX32(value, PLLCFGR, PLLREN));
-        qemu_log_mask(LOG_UNIMP, "    PLLR: %d\n", FIELD_EX32(value, PLLCFGR, PLLR));
+        qemu_log_mask(LOG_RCC, "  After:\n");
+        qemu_log_mask(LOG_RCC, "    PLLSRC: %d\n", FIELD_EX32(value, PLLCFGR, PLLSRC));
+        qemu_log_mask(LOG_RCC, "    PLLM: %d\n", FIELD_EX32(value, PLLCFGR, PLLM));
+        qemu_log_mask(LOG_RCC, "    PLLN: %d\n", FIELD_EX32(value, PLLCFGR, PLLN));
+        qemu_log_mask(LOG_RCC, "    PLLREN: %d\n", FIELD_EX32(value, PLLCFGR, PLLREN));
+        qemu_log_mask(LOG_RCC, "    PLLR: %d\n", FIELD_EX32(value, PLLCFGR, PLLR));
 
         update_clocks = true;
         break;
@@ -424,14 +424,14 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
         // Get the new SW value
         uint32_t new_sw = FIELD_EX32(s->cfgr, CFGR, SW);
 
-        qemu_log_mask(LOG_UNIMP, "CFGR write: old=0x%08x new=0x%08x\n", old_cfgr, value);
-        qemu_log_mask(LOG_UNIMP, "  SW: %d -> %d\n", old_sw, new_sw);
+        qemu_log_mask(LOG_RCC, "CFGR write: old=0x%08x new=0x%08x\n", old_cfgr, value);
+        qemu_log_mask(LOG_RCC, "  SW: %d -> %d\n", old_sw, new_sw);
 
         // Immediately reflect SW in SWS to avoid timeout
         if (old_sw != new_sw) {
             s->cfgr &= ~R_CFGR_SWS_MASK;
             s->cfgr |= (new_sw << R_CFGR_SWS_SHIFT);
-            qemu_log_mask(LOG_UNIMP, "  SWS updated to match SW: %d\n", new_sw);
+            qemu_log_mask(LOG_RCC, "  SWS updated to match SW: %d\n", new_sw);
         }
 
         update_clocks = true;
@@ -517,10 +517,10 @@ static void stm32l45_rcc_reset(DeviceState *dev)
     s->csr = 0;
 
     /* Log reset state */
-    qemu_log_mask(LOG_UNIMP, "RCC reset state:\n");
-    qemu_log_mask(LOG_UNIMP, "  CR: 0x%08x\n", s->cr);
-    qemu_log_mask(LOG_UNIMP, "  CFGR: 0x%08x\n", s->cfgr);
-    qemu_log_mask(LOG_UNIMP, "  AHB2ENR: 0x%08x\n", s->ahb2enr);
+    qemu_log_mask(LOG_RCC, "RCC reset state:\n");
+    qemu_log_mask(LOG_RCC, "  CR: 0x%08x\n", s->cr);
+    qemu_log_mask(LOG_RCC, "  CFGR: 0x%08x\n", s->cfgr);
+    qemu_log_mask(LOG_RCC, "  AHB2ENR: 0x%08x\n", s->ahb2enr);
 
     stm32l45_rcc_update_clocks(s);
 }
