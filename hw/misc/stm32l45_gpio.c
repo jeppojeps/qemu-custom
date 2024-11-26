@@ -49,14 +49,21 @@ static uint64_t stm32l45_gpio_read(void *opaque, hwaddr addr,
     return r;
 }
 
+
+
 static void stm32l45_gpio_write(void *opaque, hwaddr addr,
                                uint64_t value, unsigned int size)
 {
     STM32L45GPIOState *s = (STM32L45GPIOState *)opaque;
+    qemu_log_mask(LOG_UNIMP, "GPIO%c write: addr=0x%"HWADDR_PRIx" value=0x%"PRIx64"\n",
+             'A' + s->port_id, addr, value);
+
 
     switch (addr) {
     case 0x00: /* MODER */
         s->MODER = value;
+	qemu_log_mask(LOG_UNIMP, "GPIO%c MODER set to 0x%08"PRIx32"\n",
+                 'A' + s->port_id, (uint32_t)value);
         break;
     case 0x04: /* OTYPER */
         s->OTYPER = value;
@@ -68,17 +75,44 @@ static void stm32l45_gpio_write(void *opaque, hwaddr addr,
         s->PUPDR = value;
         break;
     case 0x14: /* ODR */
+        uint32_t old_odr = s->ODR;
         s->ODR = value;
-        qemu_log_mask(LOG_UNIMP, "GPIO%c ODR write: 0x%08" PRIx32 "\n",
-                     'A' + s->port_id, (uint32_t)value);
+
+        qemu_log_mask(LOG_GPIO, "GPIO%c ODR write: 0x%08" PRIx32 " -> 0x%08" PRIx32 "\n",
+                      'A' + s->port_id, old_odr, s->ODR);
+
+        // Log only the pins that changed
+        for (int i = 0; i < 16; i++) {
+            uint32_t old_state = old_odr & (1 << i);
+            uint32_t new_state = s->ODR & (1 << i);
+
+            if (old_state != new_state) {
+                qemu_log_mask(LOG_GPIO, "GPIO%c: GPIO%d -> %s\n",
+                              'A' + s->port_id, i, new_state ? "ON" : "OFF");
+            }
+        }
+
+
         break;
+    
     case 0x18: /* BSRR */
-        /* Upper half clears bits, lower half sets bits */
-        s->ODR &= ~((value >> 16) & 0xFFFF);
-        s->ODR |= (value & 0xFFFF);
-        qemu_log_mask(LOG_UNIMP, "GPIO%c BSRR write: 0x%08" PRIx32 " -> ODR: 0x%08"
-                     PRIx32 "\n", 'A' + s->port_id, (uint32_t)value, s->ODR);
-        break;
+        uint16_t set_bits = value & 0xFFFF;
+        uint16_t reset_bits = (value >> 16) & 0xFFFF;
+        old_odr = s->ODR;
+        s->ODR &= ~reset_bits;  // Clear reset bits
+        s->ODR |= set_bits;     // Set output bits
+	// Log only the pins that changed
+        for (int i = 0; i < 16; i++) {
+            if (set_bits & (1 << i)) {
+                qemu_log_mask(LOG_GPIO, "GPIO%c BSRR write: Set GPIO%d -> ON, ODR: 0x%08x -> 0x%08x\n",
+                              'A' + s->port_id, i, old_odr, s->ODR);
+            }
+            if (reset_bits & (1 << i)) {
+                qemu_log_mask(LOG_GPIO, "GPIO%c BSRR write: Reset GPIO%d -> OFF, ODR: 0x%08x -> 0x%08x\n",
+                              'A' + s->port_id, i, old_odr, s->ODR);
+            }
+        }
+    break;
     case 0x1C: /* LCKR */
         s->LCKR = value;
         break;

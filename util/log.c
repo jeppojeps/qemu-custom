@@ -495,6 +495,12 @@ const QEMULogItem qemu_log_items[] = {
       "log every user-mode syscall, its input, and its result" },
     { LOG_PER_THREAD, "tid",
       "open a separate log file per thread; filename must contain '%d'" },
+    { LOG_GPIO, "gpio",
+      "log GPIO-related register accesses and state changes" },
+    { LOG_RCC, "rcc",
+      "log RCC-related register accesses and state changes" },
+    { LOG_UART, "uart",
+      "log UART-related register accesses and state changes" },
     { 0, NULL, NULL },
 };
 

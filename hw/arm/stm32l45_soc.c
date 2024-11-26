@@ -34,21 +34,10 @@
 #include "hw/qdev-clock.h"
 #include "hw/misc/unimp.h"
 
+/* Define proper Flash memory addresses */
+#define FLASH_MEMORY_BASE     0x08000000  // Flash memory for code
+#define FLASH_INTERFACE_BASE  0x40022000  // Flash interface registers
 
-
-/*#define SYSCFG_ADD                     0x40013800
-static const uint32_t usart_addr[] = { 0x40011000, 0x40004400, 0x40004800,
-                                       0x40004C00, 0x40005000, 0x40011400,
-                                       0x40007800, 0x40007C00 };
-* At the moment only Timer 2 to 5 are modelled 
-static const uint32_t timer_addr[] = { 0x40000000, 0x40000400,
-                                       0x40000800, 0x40000C00 };
-static const uint32_t adc_addr[] = { 0x40012000, 0x40012100, 0x40012200,
-                                     0x40012300, 0x40012400, 0x40012500 };
-static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00,
-                                       0x40013400, 0x40015000, 0x40015400 };
-#define EXTI_ADDR                      0x40013C00
-*/
 
 #define SYSCFG_ADD                     0x40010000
 static const uint32_t usart_addr[] = { 0x40013800, 0x40014400, 0x40014800,
@@ -71,16 +60,6 @@ static const uint32_t adc_addr[] = { 0x50040000 };
 static const uint32_t spi_addr[] =   { 0x40013000, 0x40003800, 0x40003C00 };
 #define EXTI_ADDR                      0x40010400
 
-
-/*
-#define SYSCFG_IRQ               71
-static const int usart_irq[] = { 37, 38, 39, 52, 53, 71, 82, 83 };
-static const int timer_irq[] = { 28, 29, 30, 50 };
-#define ADC_IRQ 18
-static const int spi_irq[] =   { 35, 36, 51, 0, 0, 0 };
-static const int exti_irq[] =  { 6, 7, 8, 9, 10, 23, 23, 23, 23, 23, 40,
-                                 40, 40, 40, 40, 40} ;
-*/
 
 #define SYSCFG_IRQ 71  
 static const int usart_irq[] = { 37, 38, 39}; // USART1, USART2, USART3
@@ -133,6 +112,9 @@ static void stm32l45_soc_initfn(Object *obj)
     //s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
 }
 
+
+
+
 static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
 {
     STM32L45State *s = STM32L45_SOC(dev_soc);
@@ -142,15 +124,16 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     SysBusDevice *busdev;
     Error *err = NULL;
     int i;
-    
+
+
     /* Initialize RCC first as it provides clocks */
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rcc), errp)) {
         return;
     }
+    rcc_dev = DEVICE(&s->rcc);
     sysbus_mmio_map(SYS_BUS_DEVICE(&s->rcc), 0, 0x40021000);
     qemu_log_mask(LOG_UNIMP, "STM32L4: RCC initialized and mapped to 0x40021000\n");
-    
-    rcc_dev = DEVICE(&s->rcc);
+
     // Enable GPIO clocks (needed for peripherals)
     uint32_t initial_ahbenr =
         0x1 << 0 |  // GPIOAEN
@@ -159,10 +142,39 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         0x1 << 3 |  // GPIODEN
         0x1 << 4;   // GPIOEEN
 
+   /* Access RCC registers through memory operations */
+   MemoryRegion *rcc_mr = &s->rcc.mmio;
+   if (rcc_mr && rcc_mr->ops) {
+       uint32_t verify_before = 0;
+       address_space_read(&address_space_memory,
+                         0x40021000 + 0x4C,
+                         MEMTXATTRS_UNSPECIFIED,
+                         (uint8_t *)&verify_before,
+                         sizeof(verify_before));
+
+       qemu_log_mask(LOG_UNIMP, "STM32L4: RCC AHB2ENR before write = 0x%08x\n",
+                    verify_before);
+
+       /* Write to AHB2ENR */
+       address_space_write(&address_space_memory,
+                         0x40021000 + 0x4C,
+                         MEMTXATTRS_UNSPECIFIED,
+                         (uint8_t *)&initial_ahbenr,
+                         sizeof(initial_ahbenr));
+
+       /* Read back for verification */
+       uint32_t verify_after = 0;
+       address_space_read(&address_space_memory,
+                         0x40021000 + 0x4C,
+                         MEMTXATTRS_UNSPECIFIED,
+                         (uint8_t *)&verify_after,
+                         sizeof(verify_after));
+
+       qemu_log_mask(LOG_UNIMP, "STM32L4: RCC AHB2ENR after write: expected=0x%08x actual=0x%08x\n",
+                    initial_ahbenr, verify_after);
+   }
     //shadow write
 
-    /* Access RCC registers through memory operations */
-    MemoryRegion *rcc_mr = &s->rcc.mmio;
     /* Only proceed if we have the memory region */
     if (rcc_mr && rcc_mr->ops) {
         /* Write to AHB2ENR using address_space_write */
@@ -184,8 +196,8 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
                      verify);
     }
 
-    
-    
+
+    /*
     memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
                            FLASH_SIZE, &err);
     if (err != NULL) {
@@ -198,6 +210,30 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
 
     memory_region_add_subregion(system_memory, FLASH_BASE_ADDRESS, &s->flash);
     memory_region_add_subregion(system_memory, 0, &s->flash_alias);
+    */
+
+    /* Initialize Flash Memory (for code) */
+    memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
+                          FLASH_SIZE, &err);
+    if (err != NULL) {
+        error_propagate(errp, err);
+        return;
+    }
+    memory_region_init_alias(&s->flash_alias, OBJECT(dev_soc),
+                            "STM32L45.flash.alias", &s->flash, 0,
+                            FLASH_SIZE);
+
+    /* Map Flash memory to correct addresses */
+    memory_region_add_subregion(system_memory, FLASH_MEMORY_BASE, &s->flash);
+    memory_region_add_subregion(system_memory, 0, &s->flash_alias);
+
+    /* Initialize Flash Interface Registers */
+    MemoryRegion *flash_regs = g_new(MemoryRegion, 1);
+    memory_region_init_ram_nomigrate(flash_regs, OBJECT(dev_soc),
+                                   "stm32l4.flash_regs", 0x400,
+                                   &error_fatal);
+    memory_region_add_subregion(system_memory, FLASH_INTERFACE_BASE,
+                               flash_regs);
 
     memory_region_init_ram(&s->sram, NULL, "STM32L45.sram", SRAM_SIZE,
                            &err);
@@ -247,16 +283,20 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, SYSCFG_IRQ));
 
 
-
     /* GPIO devices */
     for (i = 0; i < 8; i++) {
         dev = DEVICE(&s->gpio[i]);
+        qdev_prop_set_uint8(dev, "port-id", i);  // Set port ID
         if (!sysbus_realize(SYS_BUS_DEVICE(&s->gpio[i]), errp)) {
             return;
         }
         busdev = SYS_BUS_DEVICE(dev);
-        sysbus_mmio_map(busdev, 0, 0x48000000 + (i * 0x400));
+        uint32_t gpio_addr = 0x48000000 + (i * 0x400);
+        sysbus_mmio_map(busdev, 0, gpio_addr);
+        qemu_log_mask(LOG_UNIMP, "STM32L4: Initialized GPIO%c at 0x%08x\n",
+                     'A' + i, gpio_addr);
     }
+
     /* Attach UART (uses USART registers) and USART controllers */
     for (i = 0; i < STM_NUM_USARTS; i++) {
         dev = DEVICE(&(s->usart[i]));
