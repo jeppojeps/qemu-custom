@@ -22,6 +22,7 @@ struct STM32L45GPIOState {
     uint32_t IDR;       /* Input data register */
     uint32_t ODR;       /* Output data register */
     uint32_t BSRR;      /* Bit set/reset register */
+    uint32_t BRR;      /* Bit set/reset register */
     uint32_t LCKR;      /* Configuration lock register */
     uint32_t AFR[2];    /* Alternate function registers */
     
