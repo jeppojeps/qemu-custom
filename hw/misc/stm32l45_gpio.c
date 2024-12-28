@@ -40,6 +40,9 @@ static uint64_t stm32l45_gpio_read(void *opaque, hwaddr addr,
     case 0x24: /* AFRH */
         r = s->AFR[1];
         break;
+    case 0x28: /* BRR */
+    	r = 0;  // Write-only
+    	break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                     "STM32L45 GPIO: Read access to unknown register 0x%"
@@ -122,6 +125,16 @@ static void stm32l45_gpio_write(void *opaque, hwaddr addr,
     case 0x24: /* AFRH */
         s->AFR[1] = value;
         break;
+    case 0x28: /* BRR */
+    	old_odr = s->ODR;
+    	s->ODR &= ~value;  // Reset bits
+    	for (int i = 0; i < 16; i++) {
+    	    if (value & (1 << i)) {
+    	        qemu_log_mask(LOG_GPIO, "GPIO%c BRR write: Reset GPIO%d -> OFF, ODR: 0x%08x -> 0x%08x\n",
+    	            'A' + s->port_id, i, old_odr, s->ODR);
+    	    }
+    	}
+    	break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                     "STM32L45 GPIO: Write access to unknown register 0x%"
@@ -157,6 +170,7 @@ static void stm32l45_gpio_reset(DeviceState *dev)
     s->IDR = 0;
     s->ODR = 0;
     s->BSRR = 0;
+    s->BRR = 0;
     s->LCKR = 0;
     s->AFR[0] = 0;
     s->AFR[1] = 0;
