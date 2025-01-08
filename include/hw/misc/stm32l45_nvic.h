@@ -1,11 +1,11 @@
-#ifndef STM32_NVIC_H
-#define STM32_NVIC_H
+#ifndef HW_STM32L45_NVIC_H
+#define HW_STM32L45_NVIC_H
 
 #include "hw/sysbus.h"
+#include "qemu/log.h"
 
-#define TYPE_STM32_NVIC "stm32-nvic"
-#define STM32_NVIC(obj) \
-    OBJECT_CHECK(STM32NVICState, (obj), TYPE_STM32_NVIC)
+#define TYPE_STM32L45_NVIC "stm32l45-nvic"
+OBJECT_DECLARE_SIMPLE_TYPE(STM32L45NVICState, STM32L45_NVIC)
 
 // NVIC Register Offsets
 #define NVIC_AIRCR_OFFSET     0xD0C
@@ -22,12 +22,12 @@
 #define AIRCR_PRIGROUP_MASK   0x00000700
 #define AIRCR_PRIGROUP_SHIFT  8
 
-typedef struct STM32NVICState {
+typedef struct STM32L45NVICState {
     /*< private >*/
     SysBusDevice parent_obj;
     /*< public >*/
     
-    MemoryRegion iomem;
+    MemoryRegion mmio;
     
     // Core NVIC registers
     uint32_t aircr;  // Application Interrupt and Reset Control Register

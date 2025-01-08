@@ -29,6 +29,7 @@
 #include "hw//misc/stm32f4xx_exti.h"
 #include "hw//misc/stm32l45_rcc.h"
 #include "hw//misc/stm32l45_gpio.h"
+#include "hw//misc/stm32l45_nvic.h"
 #include "hw/timer/stm32f2xx_timer.h"
 #include "hw/char/stm32f2xx_usart.h"
 #include "hw/adc/stm32f2xx_adc.h"
@@ -83,6 +84,7 @@ struct STM32L45State {
     Clock *sysclk;
     Clock *refclk;
     STM32L45GPIOState gpio[9];
+    STM32L45NVICState nvic;
 };
 
 #endif

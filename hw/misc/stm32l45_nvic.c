@@ -4,7 +4,7 @@
 #include "qemu/timer.h"
 #include "qapi/error.h"
 #include "migration/vmstate.h"
-#include "hw/misc/stm32l45_rcc.h"
+#include "hw/misc/stm32l45_nvic.h"
 #include "hw/clock.h"
 #include "hw/irq.h"
 #include "hw/qdev-clock.h"
@@ -16,7 +16,7 @@
 
 static uint64_t stm32_nvic_read(void *opaque, hwaddr addr, unsigned size)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     
     switch (addr) {
         case NVIC_AIRCR_OFFSET:
@@ -47,7 +47,7 @@ static uint64_t stm32_nvic_read(void *opaque, hwaddr addr, unsigned size)
 
 static void stm32_nvic_write(void *opaque, hwaddr addr, uint64_t value, unsigned size)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     
     switch (addr) {
         case NVIC_AIRCR_OFFSET:
@@ -92,11 +92,11 @@ static const MemoryRegionOps stm32_nvic_ops = {
 
 static void stm32_nvic_init(Object *obj)
 {
-    STM32NVICState *s = STM32_NVIC(obj);
+    STM32L45NVICState *s = STM32L45_NVIC(obj);
     
-    memory_region_init_io(&s->iomem, obj, &stm32_nvic_ops, s,
-                         TYPE_STM32_NVIC, 0x1000);
-    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
+    memory_region_init_io(&s->mmio, obj, &stm32_nvic_ops, s,
+                         TYPE_STM32L45_NVIC, 0x1000);
+    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->mmio);
     
     // Initialize IRQ lines
     qdev_init_gpio_out(DEVICE(obj), s->irq, 240);
@@ -112,7 +112,7 @@ static void stm32_nvic_init(Object *obj)
 // External API implementation
 void stm32_nvic_set_pending(void *opaque, int irq)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     if (irq >= 0 && irq < 240) {
         s->irq_state[irq] |= 0x01;
     }
@@ -120,7 +120,7 @@ void stm32_nvic_set_pending(void *opaque, int irq)
 
 void stm32_nvic_clear_pending(void *opaque, int irq)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     if (irq >= 0 && irq < 240) {
         s->irq_state[irq] &= ~0x01;
     }
@@ -128,7 +128,7 @@ void stm32_nvic_clear_pending(void *opaque, int irq)
 
 int stm32_nvic_acknowledge_irq(void *opaque)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     // Basic priority-based IRQ acknowledgment
     for (int i = 0; i < 240; i++) {
         if (s->irq_state[i] & 0x01) {
@@ -140,16 +140,16 @@ int stm32_nvic_acknowledge_irq(void *opaque)
 
 void stm32_nvic_complete_irq(void *opaque, int irq)
 {
-    STM32NVICState *s = (STM32NVICState *)opaque;
+    STM32L45NVICState *s = (STM32L45NVICState *)opaque;
     if (irq >= 0 && irq < 240) {
         s->irq_state[irq] &= ~0x01;
     }
 }
 
 static const TypeInfo stm32_nvic_info = {
-    .name          = TYPE_STM32_NVIC,
+    .name          = TYPE_STM32L45_NVIC,
     .parent        = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(STM32NVICState),
+    .instance_size = sizeof(STM32L45NVICState),
     .instance_init = stm32_nvic_init,
 };
 

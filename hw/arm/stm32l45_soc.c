@@ -73,6 +73,9 @@ static void stm32l45_soc_initfn(Object *obj)
     STM32L45State *s = STM32L45_SOC(obj);
     int i;
 
+    /* Initialize NVIC before ARMV7M */
+    object_initialize_child(obj, "nvic", &s->nvic, TYPE_STM32L45_NVIC);
+
     object_initialize_child(obj, "armv7m", &s->armv7m, TYPE_ARMV7M);
 
     object_initialize_child(obj, "syscfg", &s->syscfg, TYPE_STM32F4XX_SYSCFG);
@@ -125,6 +128,13 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     Error *err = NULL;
     int i;
 
+    /* Realize NVIC first */
+    if (!sysbus_realize(SYS_BUS_DEVICE(&s->nvic), errp)) {
+        return;
+    }
+
+    /* Map NVIC at its standard Cortex-M address */
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->nvic), 0, 0xE000E000);
 
     /* Initialize RCC first as it provides clocks */
     if (!sysbus_realize(SYS_BUS_DEVICE(&s->rcc), errp)) {
@@ -266,6 +276,9 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     qdev_connect_clock_in(armv7m, "refclk",
                          qdev_get_clock_out(rcc_dev, "hclk"));
 
+    /* Connect NVIC to ARMV7M */
+    object_property_set_link(OBJECT(&s->armv7m), "nvic", 
+                           OBJECT(&s->nvic), &error_abort);
 
     object_property_set_link(OBJECT(&s->armv7m), "memory",
                              OBJECT(system_memory), &error_abort);
@@ -280,7 +293,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     }
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_mmio_map(busdev, 0, SYSCFG_ADD);
-    sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, SYSCFG_IRQ));
+    sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(DEVICE(&s->nvic), SYSCFG_IRQ));
 
 
     /* GPIO devices */
@@ -306,7 +319,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         }
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, usart_addr[i]);
-        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
+        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(DEVICE(&s->nvic), usart_irq[i]));
     }
 
     /* Timer 2 to 5 */
@@ -318,7 +331,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         }
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, timer_addr[i]);
-        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, timer_irq[i]));
+        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(DEVICE(&s->nvic), timer_irq[i]));
     }
 
     /* ADC device, the IRQs are ORed together */
@@ -333,7 +346,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         return;
     }
     qdev_connect_gpio_out(DEVICE(&s->adc_irqs), 0,
-                          qdev_get_gpio_in(armv7m, ADC_IRQ));
+                          qdev_get_gpio_in(DEVICE(&s->nvic), ADC_IRQ));
 
     for (i = 0; i < STM_NUM_ADCS; i++) {
         dev = DEVICE(&(s->adc[i]));
@@ -354,7 +367,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         }
         busdev = SYS_BUS_DEVICE(dev);
         sysbus_mmio_map(busdev, 0, spi_addr[i]);
-        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, spi_irq[i]));
+        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(DEVICE(&s->nvic), spi_irq[i]));
     }
 
     /* EXTI device */
@@ -365,7 +378,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     busdev = SYS_BUS_DEVICE(dev);
     sysbus_mmio_map(busdev, 0, EXTI_ADDR);
     for (i = 0; i < 5; i++) {
-        sysbus_connect_irq(busdev, i, qdev_get_gpio_in(armv7m, exti_irq[i]));
+        sysbus_connect_irq(busdev, i, qdev_get_gpio_in(DEVICE(&s->nvic), exti_irq[i]));
     }
     for (i = 0; i < 14; i++) {
         qdev_connect_gpio_out(DEVICE(&s->syscfg), i, qdev_get_gpio_in(dev, i));
