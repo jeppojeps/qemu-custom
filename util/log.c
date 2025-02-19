@@ -501,6 +501,8 @@ const QEMULogItem qemu_log_items[] = {
       "log RCC-related register accesses and state changes" },
     { LOG_UART, "uart",
       "log UART-related register accesses and state changes" },
+    { LOG_MORSE, "morse",
+      "log MORSE-banging register accesses and state changes" },
     { 0, NULL, NULL },
 };
 

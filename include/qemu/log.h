@@ -38,6 +38,7 @@ bool qemu_log_separate(void);
 #define LOG_GPIO           (1 << 21)
 #define LOG_RCC           (1 << 22)
 #define LOG_UART           (1 << 23)
+#define LOG_MORSE          (1 << 24)
 
 /* Lock/unlock output. */
 

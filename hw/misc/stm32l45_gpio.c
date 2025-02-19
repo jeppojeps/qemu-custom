@@ -3,6 +3,37 @@
 #include "qemu/log.h"
 #include "hw/qdev-properties.h"
 #include "migration/vmstate.h"
+
+#define PATTERN_LENGTH 92 
+
+// Global cursor to track progress in pattern matching
+static int cursor = 0;
+
+// The target pattern to match 
+static const char target_pattern[] = "10110110101100001100001100001010110000101101101101011011010000000100000000001011011011000010";
+
+
+// Function to detect the sequence
+static int detector(int upcoming_bit) {
+    qemu_log_mask(LOG_GPIO, "TEST %d\n", upcoming_bit);
+    // Convert character to numeric value
+    
+    // Check if the upcoming bit matches the expected bit in the pattern
+    if (upcoming_bit == (target_pattern[cursor++] - '0')) {
+        qemu_log_mask(LOG_GPIO, "MATCH: %d\n", cursor);
+        // Full pattern matched
+        if (cursor == PATTERN_LENGTH) {
+            qemu_log_mask(LOG_MORSE, "Mind and Iron\n");
+            return 1; // Pattern detected
+        }
+    } else {
+        // Mismatch: reset cursor, but check if the new bit is the start of the pattern
+        qemu_log_mask(LOG_GPIO, "MISS: %d\n", cursor);
+        cursor = (upcoming_bit == (target_pattern[0] - '0')) ? 1 : 0;
+    }
+    return 0; // Pattern not fully detected yet
+}
+
 static uint64_t stm32l45_gpio_read(void *opaque, hwaddr addr,
                                   unsigned int size)
 {
@@ -84,38 +115,35 @@ static void stm32l45_gpio_write(void *opaque, hwaddr addr,
         qemu_log_mask(LOG_GPIO, "GPIO%c ODR write: 0x%08" PRIx32 " -> 0x%08" PRIx32 "\n",
                       'A' + s->port_id, old_odr, s->ODR);
 
-        // Log only the pins that changed
-        for (int i = 0; i < 16; i++) {
-            uint32_t old_state = old_odr & (1 << i);
-            uint32_t new_state = s->ODR & (1 << i);
-
-            if (old_state != new_state) {
-                qemu_log_mask(LOG_GPIO, "GPIO%c: GPIO%d -> %s\n",
-                              'A' + s->port_id, i, new_state ? "ON" : "OFF");
-            }
-        }
-
-
         break;
-    
     case 0x18: /* BSRR */
+        // Handle Set/Reset Register
         uint16_t set_bits = value & 0xFFFF;
         uint16_t reset_bits = (value >> 16) & 0xFFFF;
-        old_odr = s->ODR;
-        s->ODR &= ~reset_bits;  // Clear reset bits
-        s->ODR |= set_bits;     // Set output bits
-	// Log only the pins that changed
-        for (int i = 0; i < 16; i++) {
-            if (set_bits & (1 << i)) {
-                qemu_log_mask(LOG_GPIO, "GPIO%c BSRR write: Set GPIO%d -> ON, ODR: 0x%08x -> 0x%08x\n",
-                              'A' + s->port_id, i, old_odr, s->ODR);
-            }
-            if (reset_bits & (1 << i)) {
-                qemu_log_mask(LOG_GPIO, "GPIO%c BSRR write: Reset GPIO%d -> OFF, ODR: 0x%08x -> 0x%08x\n",
-                              'A' + s->port_id, i, old_odr, s->ODR);
+
+        if (set_bits & (1 << 12)) {
+            qemu_log_mask(LOG_GPIO, "GPIOB BSRR: Set GPIO12 -> ON\n");
+            if (detector(1)) {
+                qemu_log_mask(LOG_GPIO, "COMPLETE MORSE SEQUENCE DETECTED!\n");
             }
         }
-    break;
+        if (reset_bits & (1 << 12)) {
+            qemu_log_mask(LOG_GPIO, "GPIOB BSRR: Reset GPIO12 -> OFF\n");
+            if (detector(0)) {
+                qemu_log_mask(LOG_GPIO, "COMPLETE MORSE SEQUENCE DETECTED!\n");
+            }
+        }
+        break;
+
+    case 0x28: /* BRR */
+        // Handle Bit Reset Register
+        if (value & (1 << 12)) {
+            qemu_log_mask(LOG_GPIO, "GPIOB BRR: Reset GPIO12 -> OFF\n");
+            if (detector(0)) {
+                qemu_log_mask(LOG_GPIO, "COMPLETE MORSE SEQUENCE DETECTED!\n");
+            }
+        }
+        break;
     case 0x1C: /* LCKR */
         s->LCKR = value;
         break;
@@ -125,16 +153,6 @@ static void stm32l45_gpio_write(void *opaque, hwaddr addr,
     case 0x24: /* AFRH */
         s->AFR[1] = value;
         break;
-    case 0x28: /* BRR */
-    	old_odr = s->ODR;
-    	s->ODR &= ~value;  // Reset bits
-    	for (int i = 0; i < 16; i++) {
-    	    if (value & (1 << i)) {
-    	        qemu_log_mask(LOG_GPIO, "GPIO%c BRR write: Reset GPIO%d -> OFF, ODR: 0x%08x -> 0x%08x\n",
-    	            'A' + s->port_id, i, old_odr, s->ODR);
-    	    }
-    	}
-    	break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                     "STM32L45 GPIO: Write access to unknown register 0x%"
