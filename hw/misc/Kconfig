@@ -85,6 +85,9 @@ config STM32F4XX_EXTI
 config STM32L45_GPIO
     bool
 
+config STM32L45_UART
+    bool
+
 config STM32L45_RCC
     bool
 

@@ -40,8 +40,14 @@
 
 
 #define SYSCFG_ADD                     0x40010000
-static const uint32_t usart_addr[] = { 0x40013800, 0x40014400, 0x40014800,
-                                       0x40014C00};
+
+static const uint32_t uart_addr[] = { 
+    0x40013800,  // USART1
+    0x40004400,  // USART2
+    0x40004800,  // USART3
+    0x40004C00   // UART4
+};
+
 static const uint32_t timer_addr[] = {
     0x40012C00,  // TIM1
     0x40000000,  // TIM2
@@ -87,11 +93,13 @@ static void stm32l45_soc_initfn(Object *obj)
         object_initialize_child(obj, gpio_name, &s->gpio[i], TYPE_STM32L45_GPIO);
     }
 
-
-    for (i = 0; i < STM_NUM_USARTS; i++) {
-        object_initialize_child(obj, "usart[*]", &s->usart[i],
-                                TYPE_STM32F2XX_USART);
+    /* Initialize UART */
+    for (i = 0; i < STM_NUM_UARTS; i++) {
+        char uart_name[16];
+        snprintf(uart_name, sizeof(uart_name), "uart[%d]", i);
+        object_initialize_child(obj, uart_name, &s->uart[i], TYPE_STM32L45_UART);
     }
+
 
     for (i = 0; i < STM_NUM_TIMERS; i++) {
         object_initialize_child(obj, "timer[*]", &s->timer[i],
@@ -141,6 +149,7 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         0x1 << 2 |  // GPIOCEN
         0x1 << 3 |  // GPIODEN
         0x1 << 4;   // GPIOEEN
+
 
    /* Access RCC registers through memory operations */
    MemoryRegion *rcc_mr = &s->rcc.mmio;
@@ -197,20 +206,6 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     }
 
 
-    /*
-    memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
-                           FLASH_SIZE, &err);
-    if (err != NULL) {
-        error_propagate(errp, err);
-        return;
-    }
-    memory_region_init_alias(&s->flash_alias, OBJECT(dev_soc),
-                             "STM32L45.flash.alias", &s->flash, 0,
-                             FLASH_SIZE);
-
-    memory_region_add_subregion(system_memory, FLASH_BASE_ADDRESS, &s->flash);
-    memory_region_add_subregion(system_memory, 0, &s->flash_alias);
-    */
 
     /* Initialize Flash Memory (for code) */
     memory_region_init_rom(&s->flash, OBJECT(dev_soc), "STM32L45.flash",
@@ -254,8 +249,9 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     /* Init CCM alias region */
     memory_region_init_alias(&s->ccm_alias, NULL, "STM32L45.ccm.alias", &s->ccm, 0, CCM_SIZE);
     memory_region_add_subregion(system_memory, CCM_ALIAS_ADDRESS, &s->ccm_alias);
-
+    /* Initialize ARMv7m early since other devices need its GPIO */
     armv7m = DEVICE(&s->armv7m);
+
     qdev_prop_set_uint32(armv7m, "num-irq", 75);
     qdev_prop_set_string(armv7m, "cpu-type", s->cpu_type);
     qdev_prop_set_bit(armv7m, "enable-bitband", true);
@@ -282,6 +278,31 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
     sysbus_mmio_map(busdev, 0, SYSCFG_ADD);
     sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, SYSCFG_IRQ));
 
+    /* Remove the first UART initialization block and keep only this one */
+    for (i = 0; i < STM_NUM_UARTS; i++) {
+        dev = DEVICE(&s->uart[i]);
+        
+
+        /* Connect clocks before realize */
+        if (i == 1) { // UART2
+            object_property_set_link(OBJECT(dev), "pclk1", 
+                                   OBJECT(s->rcc.uart2_clk), &error_abort);
+        } else {
+            object_property_set_link(OBJECT(dev), "pclk1", 
+                                   OBJECT(s->rcc.pclk1), &error_abort);
+        }
+
+        /* Set chardev before realize */
+        qdev_prop_set_chr(dev, "chardev", serial_hd(i));
+        
+        if (!sysbus_realize(SYS_BUS_DEVICE(&s->uart[i]), errp)) {
+            return;
+        }
+        busdev = SYS_BUS_DEVICE(dev);
+        sysbus_mmio_map(busdev, 0, uart_addr[i]);
+        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
+        qemu_log_mask(LOG_UNIMP, "STM32L4: Initialized UART%d at 0x%08x\n", i + 1, uart_addr[i]);
+    }
 
     /* GPIO devices */
     for (i = 0; i < 8; i++) {
@@ -295,18 +316,6 @@ static void stm32l45_soc_realize(DeviceState *dev_soc, Error **errp)
         sysbus_mmio_map(busdev, 0, gpio_addr);
         qemu_log_mask(LOG_UNIMP, "STM32L4: Initialized GPIO%c at 0x%08x\n",
                      'A' + i, gpio_addr);
-    }
-
-    /* Attach UART (uses USART registers) and USART controllers */
-    for (i = 0; i < STM_NUM_USARTS; i++) {
-        dev = DEVICE(&(s->usart[i]));
-        qdev_prop_set_chr(dev, "chardev", serial_hd(i));
-        if (!sysbus_realize(SYS_BUS_DEVICE(&s->usart[i]), errp)) {
-            return;
-        }
-        busdev = SYS_BUS_DEVICE(dev);
-        sysbus_mmio_map(busdev, 0, usart_addr[i]);
-        sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, usart_irq[i]));
     }
 
     /* Timer 2 to 5 */

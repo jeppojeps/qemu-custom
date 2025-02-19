@@ -67,11 +67,14 @@ struct STM32L45RccState {
     uint32_t apb2enr;
     uint32_t apb1enr;
     uint32_t ahb2enr;
+    uint32_t apb1enr1;    // Add this
+    uint32_t apb1enr2;    // Add this
     uint32_t bdcr;
     uint32_t csr;
     uint32_t pllcfgr;    // Add this
     uint32_t ccipr;
     uint32_t pllsai1cfgr;
+    Clock *uart2_clk;    // Add UART2 clock output
 
     /* Configuration */
     uint32_t hse_freq;

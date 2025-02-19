@@ -39,11 +39,12 @@
 #include "hw/clock.h"
 #include "hw/or-irq.h"
 #include "hw/robot/robot.h"
+#include "hw/misc/stm32l45_uart.h"
 
 #define TYPE_STM32L45_SOC "stm32l45-soc"
 OBJECT_DECLARE_SIMPLE_TYPE(STM32L45State, STM32L45_SOC)
 
-#define STM_NUM_USARTS 3
+#define STM_NUM_UARTS 3
 #define STM_NUM_TIMERS 4
 #define STM_NUM_ADCS 1
 #define STM_NUM_SPIS 3
@@ -67,7 +68,6 @@ struct STM32L45State {
 
     STM32F4xxSyscfgState syscfg;
     STM32F4xxExtiState exti;
-    STM32F2XXUsartState usart[STM_NUM_USARTS];
     STM32F2XXTimerState timer[STM_NUM_TIMERS];
     OrIRQState adc_irqs;
     STM32F2XXADCState adc[STM_NUM_ADCS];
@@ -83,6 +83,7 @@ struct STM32L45State {
     Clock *sysclk;
     Clock *refclk;
     STM32L45GPIOState gpio[9];
+    STM32L45UARTState uart[STM_NUM_UARTS];
 };
 
 #endif

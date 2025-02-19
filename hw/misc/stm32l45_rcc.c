@@ -45,12 +45,15 @@
 #define RCC_AHB2ENR_GPIOCEN     (1 << 2)
 #define RCC_AHB2ENR_GPIODEN     (1 << 3)
 #define RCC_AHB2ENR_GPIOEEN     (1 << 4)
+#define RCC_APB1ENR1_USART2EN (1 << 17)
+
+
 
 /* Register field definitions */
 REG32(CR, 0x00)
     FIELD(CR, HSION, 0, 1)
     FIELD(CR, HSIRDY, 1, 1)
-    FIELD(CR, MSIRANGE, 4, 4)  /* MSI clock ranges */
+    FIELD(CR, MSIRANGE, 4, 4)
     FIELD(CR, MSION, 8, 1)
     FIELD(CR, MSIRDY, 9, 1)
     FIELD(CR, HSEON, 16, 1)
@@ -68,14 +71,32 @@ REG32(CFGR, 0x04)
 REG32(CIR, 0x08)
 REG32(APB2RSTR, 0x0C)
 REG32(APB1RSTR, 0x10)
-REG32(AHB2ENR, 0x4C)  // AHB2 peripheral clock enable register
 REG32(AHBENR, 0x14)
-REG32(APB2ENR, 0x18)
+REG32(APB2ENR, 0x18)  // Keep this one, remove the 0x60 version
 REG32(APB1ENR, 0x1C)
 REG32(BDCR, 0x20)
 REG32(CSR, 0x24)
+REG32(AHB2ENR, 0x4C)
 
-REG32(CCIPR, 0x58)
+// New registers for STM32L4
+REG32(APB1ENR1, 0x58)  // APB1 peripheral clock enable register 1
+    FIELD(APB1ENR1, USART2EN, 17, 1)
+    FIELD(APB1ENR1, USART3EN, 18, 1)
+
+REG32(APB1ENR2, 0x5C)  // APB1 peripheral clock enable register 2
+
+REG32(PLLCFGR, 0x60)   // This was the correct register at 0x60, not APB2ENR
+    FIELD(PLLCFGR, PLLSRC, 0, 2)
+    FIELD(PLLCFGR, PLLM, 4, 3)
+    FIELD(PLLCFGR, PLLN, 8, 7)
+    FIELD(PLLCFGR, PLLP, 17, 1)
+    FIELD(PLLCFGR, PLLPEN, 16, 1)
+    FIELD(PLLCFGR, PLLQ, 21, 2)
+    FIELD(PLLCFGR, PLLQEN, 20, 1)
+    FIELD(PLLCFGR, PLLR, 25, 2)
+    FIELD(PLLCFGR, PLLREN, 24, 1)
+
+REG32(CCIPR, 0x88)    // Move CCIPR to correct offset
     FIELD(CCIPR, USART1SEL, 0, 2)
     FIELD(CCIPR, USART2SEL, 2, 2)
     FIELD(CCIPR, USART3SEL, 4, 2)
@@ -88,19 +109,6 @@ REG32(CCIPR, 0x58)
     FIELD(CCIPR, CLK48SEL, 26, 2)
     FIELD(CCIPR, ADCSEL, 28, 2)
     FIELD(CCIPR, SWPMI1SEL, 30, 1)
-
-
-REG32(PLLCFGR, 0x60)
-    FIELD(PLLCFGR, PLLSRC, 0, 2)
-    FIELD(PLLCFGR, PLLM, 4, 3)
-    FIELD(PLLCFGR, PLLN, 8, 7)
-    FIELD(PLLCFGR, PLLP, 17, 1)  
-    FIELD(PLLCFGR, PLLPEN, 16, 1)
-    FIELD(PLLCFGR, PLLQ, 21, 2)
-    FIELD(PLLCFGR, PLLQEN, 20, 1)
-    FIELD(PLLCFGR, PLLR, 25, 2)
-    FIELD(PLLCFGR, PLLREN, 24, 1)
-
 
 REG32(PLLSAI1CFGR, 0x94)
     FIELD(PLLSAI1CFGR, PLLSAI1N, 8, 7)
@@ -141,103 +149,249 @@ static void dump_rcc_registers(STM32L45RccState *s, const char *context) {
 
 /* Private functions */
 
+
 static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
 {
     uint32_t sysclk_freq = HSI_FREQ; /* Default to HSI */
     uint32_t pll_freq = 0;
-    uint32_t msi_freq = 100000; // Default to lowest frequency
+    uint32_t msi_freq;
 
-    /* Calculate MSI frequency if enabled */
-    if (FIELD_EX32(s->cr, CR, MSION) && FIELD_EX32(s->cr, CR, MSIRDY)) {
-        uint32_t msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
-        if (msirange < ARRAY_SIZE(msi_frequencies)) {
-            msi_freq = msi_frequencies[msirange];
-        }
-        qemu_log_mask(LOG_RCC, "MSI: range=%d freq=%d Hz\n", msirange, msi_freq);
+    qemu_log_mask(LOG_RCC, "RCC update_clocks starting:\n");
+    qemu_log_mask(LOG_RCC, "  CR=0x%08x CFGR=0x%08x PLLCFGR=0x%08x\n", 
+                  s->cr, s->cfgr, s->pllcfgr);
+
+    /* Calculate MSI frequency */
+    uint32_t msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
+    if (msirange < ARRAY_SIZE(msi_frequencies)) {
+        msi_freq = msi_frequencies[msirange];
+        qemu_log_mask(LOG_RCC, "  MSI range %d = %d Hz\n", msirange, msi_freq);
+    } else {
+        msi_freq = MSI_FREQ_BASE;
+        qemu_log_mask(LOG_RCC, "  Invalid MSI range %d, using default %d Hz\n", 
+                      msirange, msi_freq);
     }
 
-    /* PLL configuration */
+    /* Calculate PLL frequency if enabled */
     if (FIELD_EX32(s->cr, CR, PLLON) && FIELD_EX32(s->cr, CR, PLLRDY)) {
-        uint32_t pll_source;
-    
-        // Select PLL source
+        uint32_t pll_source_freq;
+        
+        /* Select PLL source */
         switch (FIELD_EX32(s->pllcfgr, PLLCFGR, PLLSRC)) {
-            case 1: // MSI
-                pll_source = msi_freq;
+            case 1: /* HSI */
+                pll_source_freq = HSI_FREQ;
+                qemu_log_mask(LOG_RCC, "  PLL using HSI source\n");
                 break;
-            case 2: // HSI16
-                pll_source = HSI_FREQ;
+            case 2: /* HSE */
+                pll_source_freq = s->hse_freq;
+                qemu_log_mask(LOG_RCC, "  PLL using HSE source\n");
                 break;
-            case 3: // HSE
-                pll_source = s->hse_freq;
+            case 3: /* MSI */
+                pll_source_freq = msi_freq;
+                qemu_log_mask(LOG_RCC, "  PLL using MSI source\n");
                 break;
             default:
-                pll_source = 0;
+                pll_source_freq = 0;
+                qemu_log_mask(LOG_RCC, "  PLL source invalid\n");
                 break;
         }
-    
-        if (pll_source > 0) {
-            uint32_t pllm = FIELD_EX32(s->pllcfgr, PLLCFGR, PLLM) + 1;  // PLLM is 1-8
-            uint32_t plln = FIELD_EX32(s->pllcfgr, PLLCFGR, PLLN);      // PLLN is 8-86
-            uint32_t pllr = (FIELD_EX32(s->pllcfgr, PLLCFGR, PLLR) + 1) * 2; // PLLR is 2,4,6,8
-            bool pllren = FIELD_EX32(s->pllcfgr, PLLCFGR, PLLREN);
-    
-            uint32_t vco = (pll_source / pllm) * plln;
-    
-            if (pllren) {
-                pll_freq = vco / pllr;
-            }
-    
-            qemu_log_mask(LOG_RCC, "PLL: src=%dHz m=%d n=%d r=%d vco=%dHz out=%dHz\n",
-                         pll_source, pllm, plln, pllr, vco, pll_freq);
+        
+        if (pll_source_freq > 0 && FIELD_EX32(s->pllcfgr, PLLCFGR, PLLREN)) {
+            uint32_t pllm = FIELD_EX32(s->pllcfgr, PLLCFGR, PLLM) + 1;
+            uint32_t plln = FIELD_EX32(s->pllcfgr, PLLCFGR, PLLN);
+            uint32_t pllr = (FIELD_EX32(s->pllcfgr, PLLCFGR, PLLR) + 1) * 2;
+            
+            pll_freq = (pll_source_freq / pllm) * plln / pllr;
+            qemu_log_mask(LOG_RCC, "  PLL: source=%d Hz, M=%d, N=%d, R=%d -> %d Hz\n",
+                         pll_source_freq, pllm, plln, pllr, pll_freq);
         }
     }
 
     /* Select system clock source */
     switch (FIELD_EX32(s->cfgr, CFGR, SW)) {
-   	case 0: /* MSI */
-   	    sysclk_freq = msi_freq;
-   	    break;
-   	case 1: /* HSI16 */
-   	    sysclk_freq = HSI_FREQ;
-   	    break;
-   	case 2: /* HSE */
-   	    if (FIELD_EX32(s->cr, CR, HSEON) && FIELD_EX32(s->cr, CR, HSERDY)) {
-   	        sysclk_freq = s->hse_freq;
-   	    }
-   	    break;
-   	case 3: /* PLL */
-   	    if (pll_freq > 0) {
-   	        sysclk_freq = pll_freq;
-   	        qemu_log_mask(LOG_RCC, "Switching to PLL clock: %d Hz\n", sysclk_freq);
-   	    }
-   	    break;
-     }
-
-    qemu_log_mask(LOG_RCC, "Clock Update: sysclk=%d Hz\n", sysclk_freq);
-
-
-    /* Update SYSCLK and derived clocks */
-    clock_update_hz(s->sysclk, sysclk_freq);
-
-    /* HCLK divider */
-    uint32_t hclk_div = 1;
-    uint32_t hpre = FIELD_EX32(s->cfgr, CFGR, HPRE);
-    if (hpre >= 8) {
-        hclk_div = 1 << (hpre - 7);
+        case 0: /* MSI */
+            sysclk_freq = msi_freq;
+            qemu_log_mask(LOG_RCC, "SYSCLK from MSI: %d Hz\n", sysclk_freq);
+            break;
+        case 1: /* HSI16 */
+            sysclk_freq = HSI_FREQ;
+            qemu_log_mask(LOG_RCC, "SYSCLK from HSI: %d Hz\n", sysclk_freq);
+            break;
+        case 2: /* HSE */
+            if (FIELD_EX32(s->cr, CR, HSEON) && FIELD_EX32(s->cr, CR, HSERDY)) {
+                sysclk_freq = s->hse_freq;
+                qemu_log_mask(LOG_RCC, "SYSCLK from HSE: %d Hz\n", sysclk_freq);
+            }
+            break;
+        case 3: /* PLL */
+            if (pll_freq > 0) {
+                sysclk_freq = pll_freq;
+                qemu_log_mask(LOG_RCC, "SYSCLK from PLL: %d Hz\n", sysclk_freq);
+            }
+            break;
     }
-    clock_update_hz(s->hclk, sysclk_freq / hclk_div);
 
-    /* APB1 divider */
+    /* Calculate HCLK */
+    uint32_t hpre = FIELD_EX32(s->cfgr, CFGR, HPRE);
+    uint32_t hclk_div = (hpre >= 8) ? (1 << (hpre - 7)) : 1;
+    uint32_t hclk = sysclk_freq / hclk_div;
+
+    /* Calculate PCLK1 */
     uint32_t ppre1 = FIELD_EX32(s->cfgr, CFGR, PPRE1);
-    uint32_t apb1_div = (ppre1 >= 4) ? (1 << (ppre1 - 3)) : 1;
-    clock_update_hz(s->pclk1, sysclk_freq / hclk_div / apb1_div);
+    uint32_t pclk1 = hclk / ((ppre1 >= 4) ? (1 << (ppre1 - 3)) : 1);
 
-    /* APB2 divider */
+    /* Calculate PCLK2 */
     uint32_t ppre2 = FIELD_EX32(s->cfgr, CFGR, PPRE2);
-    uint32_t apb2_div = (ppre2 >= 4) ? (1 << (ppre2 - 3)) : 1;
-    clock_update_hz(s->pclk2, sysclk_freq / hclk_div / apb2_div);
+    uint32_t pclk2 = hclk / ((ppre2 >= 4) ? (1 << (ppre2 - 3)) : 1);
+
+    /* Calculate and update UART clock */
+    uint32_t uart_clock;
+    switch (FIELD_EX32(s->ccipr, CCIPR, USART2SEL)) {
+        case 0: /* PCLK1 */
+            uart_clock = pclk1;
+            qemu_log_mask(LOG_RCC, "UART2 using PCLK1: %d Hz\n", uart_clock);
+            break;
+        case 1: /* SYSCLK */
+            uart_clock = sysclk_freq;
+            qemu_log_mask(LOG_RCC, "UART2 using SYSCLK: %d Hz\n", uart_clock);
+            break;
+        case 2: /* HSI16 */
+            uart_clock = HSI_FREQ;
+            qemu_log_mask(LOG_RCC, "UART2 using HSI: %d Hz\n", uart_clock);
+            break;
+        case 3: /* LSE */
+            uart_clock = LSE_FREQ;
+            qemu_log_mask(LOG_RCC, "UART2 using LSE: %d Hz\n", uart_clock);
+            break;
+    }
+
+
+    /* Only update UART clock if enabled */
+    if (s->apb1enr1 & RCC_APB1ENR1_USART2EN) {
+        clock_update_hz(s->uart2_clk, uart_clock);
+        qemu_log_mask(LOG_RCC, "Updated UART2 clock to %d Hz\n", uart_clock);
+    }
+
+    /* Update system clocks */
+    clock_update_hz(s->sysclk, sysclk_freq);
+    clock_update_hz(s->hclk, hclk);
+    clock_update_hz(s->pclk1, pclk1);
+    clock_update_hz(s->pclk2, pclk2);
+
+    qemu_log_mask(LOG_RCC, "Final clock configuration:\n");
+    qemu_log_mask(LOG_RCC, "  SYSCLK: %d Hz\n", sysclk_freq);
+    qemu_log_mask(LOG_RCC, "  HCLK: %d Hz\n", hclk);
+    qemu_log_mask(LOG_RCC, "  PCLK1: %d Hz\n", pclk1);
+    qemu_log_mask(LOG_RCC, "  PCLK2: %d Hz\n", pclk2);
+    qemu_log_mask(LOG_RCC, "  UART2: %d Hz\n", uart_clock);
 }
+
+//static void stm32l45_rcc_update_clocks(STM32L45RccState *s)
+//{
+//    uint32_t sysclk_freq = HSI_FREQ; /* Default to HSI */
+//    uint32_t pll_freq = 0;
+//    uint32_t msi_freq = msi_frequencies[0];
+//
+//    qemu_log_mask(LOG_RCC, "RCC update_clocks starting:\n");
+//    qemu_log_mask(LOG_RCC, "  CR=0x%08x CFGR=0x%08x\n", s->cr, s->cfgr);
+//
+//    /* Calculate MSI frequency if enabled */
+//    if (FIELD_EX32(s->cr, CR, MSION)) {  // Only check MSION
+//        uint32_t msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
+//        qemu_log_mask(LOG_RCC, "  MSI enabled: range=%d\n", msirange);
+//        
+//        if (msirange < ARRAY_SIZE(msi_frequencies)) {
+//            msi_freq = msi_frequencies[msirange];
+//            // Set MSIRDY when MSION is set
+//            s->cr |= R_CR_MSIRDY_MASK;
+//            qemu_log_mask(LOG_RCC, "  MSI frequency set to %d Hz\n", msi_freq);
+//        } else {
+//            qemu_log_mask(LOG_GUEST_ERROR, "Invalid MSI range: %d, using default frequency\n", msirange);
+//        }
+//    } else {
+//        // Clear MSIRDY when MSION is clear
+//        s->cr &= ~R_CR_MSIRDY_MASK;
+//    }
+//
+//    /* Select system clock source */
+//    switch (FIELD_EX32(s->cfgr, CFGR, SW)) {
+//    case 0: /* MSI */
+//        sysclk_freq = msi_freq;
+//        qemu_log_mask(LOG_RCC, "Using MSI as SYSCLK: %d Hz\n", sysclk_freq);
+//        break;
+//    case 1: /* HSI16 */
+//        sysclk_freq = HSI_FREQ;
+//        break;
+//    case 2: /* HSE */
+//        if (FIELD_EX32(s->cr, CR, HSEON) && FIELD_EX32(s->cr, CR, HSERDY)) {
+//            sysclk_freq = s->hse_freq;
+//        }
+//        break;
+//    case 3: /* PLL */
+//        if (pll_freq > 0) {
+//            sysclk_freq = pll_freq;
+//        }
+//        break;
+//    }
+//
+//    /* HCLK divider */
+//    uint32_t hclk_div = 1;
+//    uint32_t hpre = FIELD_EX32(s->cfgr, CFGR, HPRE);
+//    if (hpre >= 8) {
+//        hclk_div = 1 << (hpre - 7);
+//    }
+//    uint32_t hclk = sysclk_freq / hclk_div;
+//
+//    /* APB1 divider */
+//    uint32_t ppre1 = FIELD_EX32(s->cfgr, CFGR, PPRE1);
+//    uint32_t apb1_div = (ppre1 >= 4) ? (1 << (ppre1 - 3)) : 1;
+//    uint32_t pclk1 = hclk / apb1_div;
+//
+//    /* APB2 divider */
+//    uint32_t ppre2 = FIELD_EX32(s->cfgr, CFGR, PPRE2);
+//    uint32_t apb2_div = (ppre2 >= 4) ? (1 << (ppre2 - 3)) : 1;
+//    uint32_t pclk2 = hclk / apb2_div;
+//
+//    /* Update UART clock sources based on CCIPR */
+//    uint32_t uart_clock = pclk1; // Default to PCLK1
+//
+//    /* USART2 clock source selection from CCIPR[3:2] */
+//    switch ((s->ccipr >> 2) & 0x3) {
+//        case 0: /* PCLK1 */
+//            uart_clock = pclk1;
+//            qemu_log_mask(LOG_RCC, "  UART2 PCLK clock: %d Hz\n", uart_clock);
+//            break;
+//        case 1: /* SYSCLK */
+//            uart_clock = sysclk_freq;
+//            qemu_log_mask(LOG_RCC, "  UART2 SYS clock: %d Hz\n", uart_clock);
+//            break;
+//        case 2: /* HSI16 */
+//            uart_clock = HSI_FREQ;
+//            qemu_log_mask(LOG_RCC, "  UART2 HSI clock: %d Hz\n", uart_clock);
+//            break;
+//        case 3: /* LSE */
+//            uart_clock = LSE_FREQ;
+//            qemu_log_mask(LOG_RCC, "  UART2 LSE clock: %d Hz\n", uart_clock);
+//            break;
+//    }
+//    
+//    /* Update UART clock if enabled in APB1ENR1 */
+//    if (s->apb1enr1 & (1 << 17)) { // USART2EN
+//        clock_update_hz(s->uart2_clk, uart_clock);
+//        qemu_log_mask(LOG_RCC, "  UART2 clock: %d Hz\n", uart_clock);
+//    }
+//
+//    /* Update clocks */
+//    clock_update_hz(s->sysclk, sysclk_freq);
+//    clock_update_hz(s->hclk, hclk);
+//    clock_update_hz(s->pclk1, pclk1);
+//    clock_update_hz(s->pclk2, pclk2);
+//
+//    qemu_log_mask(LOG_RCC, "Clock Update Results:\n");
+//    qemu_log_mask(LOG_RCC, "  SYSCLK: %d Hz\n", sysclk_freq);
+//    qemu_log_mask(LOG_RCC, "  HCLK: %d Hz\n", hclk);
+//    qemu_log_mask(LOG_RCC, "  PCLK1: %d Hz\n", pclk1);
+//    qemu_log_mask(LOG_RCC, "  PCLK2: %d Hz\n", pclk2);
+//}
 
 static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
 {
@@ -285,6 +439,10 @@ static uint64_t stm32l45_rcc_read(void *opaque, hwaddr addr, unsigned int size)
     case A_APB2ENR:
         retval = s->apb2enr;
         break;
+    case A_APB1ENR1:  // Add this case
+        retval = s->apb1enr1;
+        qemu_log_mask(LOG_RCC, "RCC APB1ENR1 read: 0x%08"PRIx32"\n", s->apb1enr1);
+        break;
     case A_APB1ENR:
         retval = s->apb1enr;
         break;
@@ -313,6 +471,7 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     case A_CCIPR:
         s->ccipr = value;
         qemu_log_mask(LOG_RCC, "RCC CCIPR write: 0x%08"PRIx32"\n", value);
+        update_clocks = true;
         break;
     case A_PLLSAI1CFGR:
         s->pllsai1cfgr = value;
@@ -352,16 +511,18 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
         }
         break;
     case A_CR:
-	uint32_t old_cr = s->cr;
+        qemu_log_mask(LOG_RCC, "RCC CR write: value=0x%08x\n", value);
+        uint32_t old_cr = s->cr;
         uint32_t old_msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
 
+        // Apply new value with mask
         s->cr = (s->cr & ~rcc_cr_rw_mask) | (value & rcc_cr_rw_mask);
-
+        
         uint32_t new_msirange = FIELD_EX32(s->cr, CR, MSIRANGE);
         qemu_log_mask(LOG_RCC, "CR write: old=0x%08x new=0x%08x\n", old_cr, value);
         qemu_log_mask(LOG_RCC, "  MSIRANGE: %d -> %d\n", old_msirange, new_msirange);
 
-        /* Update ready flags */
+        // Update ready flags
         if (value & R_CR_MSION_MASK) {
             s->cr |= R_CR_MSIRDY_MASK;
         } else {
@@ -385,7 +546,7 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
 
         update_clocks = true;
         dump_rcc_registers(s, "After CR write");
-	break;
+        break;
     case A_PLLCFGR:
         uint32_t old_val = s->pllcfgr;
         qemu_log_mask(LOG_RCC, "PLLCFGR write value=0x%08x (current=0x%08x)\n", value, old_val);
@@ -460,6 +621,23 @@ static void stm32l45_rcc_write(void *opaque, hwaddr addr,
     case A_CSR:
         s->csr = value;
         break;
+    case A_APB1ENR1:
+    {
+        uint32_t changed = s->apb1enr1 ^ value;
+        s->apb1enr1 = value;
+        
+        /* Log UART clock changes */
+        if (changed & (1 << 17)) {  // USART2EN
+            qemu_log_mask(LOG_RCC, "RCC APB1ENR1: UART2 clock: %s\n",
+                        (value & (1 << 17)) ? "enabled" : "disabled");
+        }
+        if (changed & (1 << 18)) {  // USART3EN
+            qemu_log_mask(LOG_RCC, "RCC APB1ENR1: UART3 clock: %s\n",
+                        (value & (1 << 18)) ? "enabled" : "disabled");
+        }
+        update_clocks = true;
+    }
+    break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                       "%s: Bad offset 0x%"HWADDR_PRIx"\n", __func__, addr);
@@ -494,6 +672,7 @@ static void stm32l45_rcc_init(Object *obj)
     s->hclk = qdev_init_clock_out(DEVICE(s), "hclk");
     s->pclk1 = qdev_init_clock_out(DEVICE(s), "pclk1");
     s->pclk2 = qdev_init_clock_out(DEVICE(s), "pclk2");
+    s->uart2_clk = clock_new(OBJECT(s), "uart2");
 }
 
 static void stm32l45_rcc_reset(DeviceState *dev)

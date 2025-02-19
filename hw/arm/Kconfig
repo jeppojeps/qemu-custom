@@ -393,6 +393,7 @@ config STM32L45_SOC
     select STM32F4XX_EXTI
     select STM32L45_RCC
     select STM32L45_GPIO
+    select STM32L45_UART
     select ROBOT
 
 config XLNX_ZYNQMP_ARM
